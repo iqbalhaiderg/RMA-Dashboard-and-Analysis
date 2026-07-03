@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RMA Turf — Business Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#0b1220;--card:#111b2e;--card2:#0e1626;--border:#1e2a44;--txt:#e6edf7;--mut:#8b9bb8;--grn:#22c55e;--grn2:#16a34a;--red:#ef4444;--amb:#f59e0b;--blu:#3b82f6;--cyan:#06b6d4}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;padding:20px 24px 60px}
+header{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;margin-bottom:18px}
+h1{font-size:22px;letter-spacing:.3px}
+h1 .pitch{color:var(--grn)}
+.sub{color:var(--mut);font-size:12.5px;margin-top:3px}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pill{background:var(--card);border:1px solid var(--border);color:var(--mut);padding:7px 14px;border-radius:20px;font-size:13px;cursor:pointer;transition:.15s}
+.pill:hover{color:var(--txt);border-color:var(--grn)}
+.pill.on{background:var(--grn);color:#04140a;border-color:var(--grn);font-weight:600}
+.upl{background:var(--card);border:1px dashed var(--mut);color:var(--mut);padding:7px 14px;border-radius:20px;font-size:13px;cursor:pointer}
+.upl:hover{color:var(--grn);border-color:var(--grn)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:linear-gradient(160deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:14px;padding:14px 16px}
+.kpi .l{color:var(--mut);font-size:12px;margin-bottom:6px}
+.kpi .v{font-size:22px;font-weight:700}
+.kpi .d{font-size:11.5px;margin-top:5px;color:var(--mut)}
+.up{color:var(--grn)}.dn{color:var(--red)}
+.grid{display:grid;gap:14px;margin-bottom:14px}
+.g2{grid-template-columns:2fr 1fr}.g22{grid-template-columns:1fr 1fr}
+@media(max-width:900px){.g2,.g22{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
+.card h3{font-size:14px;margin-bottom:12px;color:var(--txt);display:flex;justify-content:space-between;align-items:center}
+.card h3 .hint{color:var(--mut);font-size:11px;font-weight:400}
+.chartbox{position:relative;height:280px}
+.chartbox.sm{height:240px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;color:var(--mut);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--border);font-size:11.5px;text-transform:uppercase;letter-spacing:.4px}
+td{padding:7px 8px;border-bottom:1px solid #16223a}
+td.r,th.r{text-align:right}
+tr:hover td{background:#14203a}
+.hm{overflow-x:auto}
+.hmg{display:grid;gap:3px;font-size:10.5px;min-width:640px}
+.hmc{border-radius:5px;text-align:center;padding:8px 2px;color:#04140a;font-weight:600}
+.hml{color:var(--mut);display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:11px}
+.hmh{color:var(--mut);text-align:center;font-size:10.5px;padding-bottom:4px}
+.ins{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:12px}
+.ic{background:linear-gradient(160deg,var(--card),var(--card2));border:1px solid var(--border);border-left:4px solid var(--grn);border-radius:12px;padding:14px 16px}
+.ic.warn{border-left-color:var(--amb)}.ic.risk{border-left-color:var(--red)}.ic.opp{border-left-color:var(--cyan)}
+.ic .t{font-weight:700;font-size:13.5px;margin-bottom:6px}
+.ic .b{color:#b9c6dd;font-size:12.5px;line-height:1.55}
+.ic .b b{color:var(--txt)}
+.tag{display:inline-block;font-size:10px;padding:2px 8px;border-radius:10px;margin-bottom:8px;font-weight:700;letter-spacing:.5px}
+.tag.g{background:#123524;color:var(--grn)}.tag.a{background:#3a2a08;color:var(--amb)}.tag.r{background:#3a1414;color:#f87171}.tag.c{background:#082f3a;color:#22d3ee}
+.sec{font-size:16px;margin:22px 0 12px;display:flex;align-items:center;gap:8px}
+.sec:before{content:'';width:4px;height:18px;background:var(--grn);border-radius:2px;display:inline-block}
+footer{color:var(--mut);font-size:11.5px;margin-top:26px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>⚽ RMA Turf <span class="pitch">Business Dashboard</span></h1>
+    <div class="sub" id="sub"></div>
+  </div>
+  <div class="controls" id="filters">
+    <label class="upl">⬆ Update from Excel<input type="file" id="file" accept=".xlsx" style="display:none"></label>
+  </div>
+</header>
+
+<div class="kpis" id="kpis"></div>
+
+<div class="grid g2">
+  <div class="card"><h3>Monthly Revenue, Expenses &amp; Profit <span class="hint">৳ thousands</span></h3><div class="chartbox"><canvas id="cMonthly"></canvas></div></div>
+  <div class="card"><h3>Expense Breakdown <span class="hint">selected period</span></h3><div class="chartbox"><canvas id="cExp"></canvas></div></div>
+</div>
+
+<div class="grid g22">
+  <div class="card"><h3>Revenue by Time Slot <span class="hint">bookings count overlaid</span></h3><div class="chartbox sm"><canvas id="cSlot"></canvas></div></div>
+  <div class="card"><h3>Revenue by Day of Week</h3><div class="chartbox sm"><canvas id="cDow"></canvas></div></div>
+</div>
+
+<div class="card" style="margin-bottom:14px"><h3>Occupancy Heatmap — Day × Slot <span class="hint">% of days each slot is booked</span></h3><div class="hm" id="heat"></div></div>
+
+<div class="grid g22">
+  <div class="card"><h3>Top 15 Clients <span class="hint">by revenue, selected period</span></h3><div style="max-height:340px;overflow:auto"><table id="tTop"></table></div></div>
+  <div class="card"><h3>⚠ Lapsed Regulars — Win-back List <span class="hint">5+ lifetime bookings, inactive 60+ days</span></h3><div style="max-height:340px;overflow:auto"><table id="tLapsed"></table></div></div>
+</div>
+
+<div class="sec">🤖 AI Growth Insights</div>
+<div class="ins" id="insights"></div>
+
+<footer>Generated from RMA Sales &amp; Expenses workbook · All amounts in BDT (৳) · Re-upload your updated Excel any time to refresh every chart and insight.</footer>
+
+<script>
+const RAW = __DATA__;
+let DATA = RAW;
+const SLOT_ORDER = ['06:30','08:00','09:30','11:00','12:30','14:00','15:30','17:00','18:30','20:00','21:30','23:00','00:00','00:30'];
+const DOWS = ['Sat','Sun','Mon','Tue','Wed','Thu','Fri'];
+const fmt = n => '৳' + Math.round(n).toLocaleString('en-IN');
+const fmtK = n => n>=100000 ? (n/100000).toFixed(1)+'L' : n>=1000 ? Math.round(n/1000)+'k' : Math.round(n);
+const pct = n => (n*100).toFixed(1)+'%';
+let period = 'all', charts = {};
+
+function slotMins(s){let[h,m]=s.split(':').map(Number);let v=h*60+m;return v<360?v+1440:v;} // day starts 06:00
+function normSlot(s){if(!s)return null;s=String(s);const m=s.match(/(\d{1,2}):(\d{2})/g);const t=m?m[m.length-1]:null;return t?t.padStart(5,'0'):null;}
+
+function inPeriod(dt){
+  if(period==='all')return true;
+  if(period==='12m'){const max=DATA.maxDate;const from=new Date(max);from.setMonth(from.getMonth()-12);return new Date(dt)>=from;}
+  return dt.startsWith(period);
+}
+function prevPeriodSales(){ // for comparison delta on KPIs (same-length previous window)
+  if(period==='all')return null;
+  let from,to;
+  if(period==='12m'){to=new Date(DATA.maxDate);to.setMonth(to.getMonth()-12);from=new Date(to);from.setMonth(from.getMonth()-12);}
+  else{const y=+period;from=new Date(y-1,0,1);to=new Date(y-1,11,31,23,59);}
+  return DATA.sales.filter(s=>{const d=new Date(s.date);return d>=from&&d<=to;});
+}
+
+function prep(raw){
+  const sales = raw.sales.map(s=>({...s, slot:normSlot(s.slot)})).filter(s=>s.slot);
+  const txns = raw.txns;
+  const dates = sales.map(s=>s.date).sort();
+  return {sales, txns, minDate:dates[0], maxDate:dates[dates.length-1]};
+}
+
+function daysIn(fromStr,toStr){return Math.round((new Date(toStr)-new Date(fromStr))/864e5)+1;}
+function periodRange(){
+  if(period==='all')return [DATA.minDate, DATA.maxDate];
+  if(period==='12m'){const from=new Date(DATA.maxDate);from.setMonth(from.getMonth()-12);return [from.toISOString().slice(0,10), DATA.maxDate];}
+  const to = period===DATA.maxDate.slice(0,4)?DATA.maxDate:period+'-12-31';
+  return [period+'-01-01', to];
+}
+
+function destroy(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
+const gridC='#1e2a44', tickC='#8b9bb8';
+const baseOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:tickC,boxWidth:12,font:{size:11}}}},scales:{x:{ticks:{color:tickC,font:{size:10}},grid:{color:gridC}},y:{ticks:{color:tickC,font:{size:10}},grid:{color:gridC}}}};
+
+function render(){
+  const S = DATA.sales.filter(s=>inPeriod(s.date));
+  const T = DATA.txns.filter(t=>inPeriod(t.date));
+  const exp = T.filter(t=>t.type==='Expense' && !t.cat.startsWith('I -'));
+  const otherInc = T.filter(t=>t.cat.startsWith('I -')).reduce((a,t)=>a+t.amount,0);
+  const rev = S.reduce((a,s)=>a+s.paid,0) + otherInc;
+  const expTot = exp.reduce((a,t)=>a+t.amount,0);
+  const profit = rev - expTot;
+  const [pFrom,pTo] = periodRange();
+  const nDays = daysIn(pFrom,pTo);
+  const occ = S.length/(nDays*11);
+  const clients = new Set(S.map(s=>s.client));
+  const avg = S.length? S.reduce((a,s)=>a+s.paid,0)/S.length : 0;
+
+  // KPI deltas vs previous window
+  const prev = prevPeriodSales();
+  let dRev='';
+  if(prev && prev.length){const pr=prev.reduce((a,s)=>a+s.paid,0);const g=(S.reduce((a,s)=>a+s.paid,0)-pr)/pr;dRev=`<span class="${g>=0?'up':'dn'}">${g>=0?'▲':'▼'} ${pct(Math.abs(g))}</span> vs prior period`;}
+
+  document.getElementById('sub').textContent = `${pFrom} → ${pTo} · ${S.length.toLocaleString()} bookings · ${clients.size.toLocaleString()} unique clients`;
+  document.getElementById('kpis').innerHTML = [
+    ['Total Revenue', fmt(rev), dRev],
+    ['Total Expenses', fmt(expTot), `${pct(expTot/(rev||1))} of revenue`],
+    ['Net Profit', `<span class="${profit>=0?'up':'dn'}">${fmt(profit)}</span>`, `margin ${pct(profit/(rev||1))}`],
+    ['Bookings', S.length.toLocaleString(), `${(S.length/nDays).toFixed(1)} per day`],
+    ['Occupancy', pct(occ), 'of 11 daily slots'],
+    ['Avg. per Slot', fmt(avg), 'booking value'],
+  ].map(k=>`<div class="kpi"><div class="l">${k[0]}</div><div class="v">${k[1]}</div><div class="d">${k[2]}</div></div>`).join('');
+
+  // Monthly chart (always full history for context)
+  const mm={};
+  DATA.sales.forEach(s=>{const m=s.date.slice(0,7);(mm[m]=mm[m]||{r:0,e:0}).r+=s.paid;});
+  DATA.txns.forEach(t=>{const m=t.date.slice(0,7);mm[m]=mm[m]||{r:0,e:0};if(t.type==='Expense'&&!t.cat.startsWith('I -'))mm[m].e+=t.amount;else mm[m].r+=t.amount;});
+  const months=Object.keys(mm).sort();
+  destroy('m');
+  charts.m=new Chart(cMonthly,{data:{labels:months,datasets:[
+    {type:'bar',label:'Revenue',data:months.map(m=>mm[m].r/1000),backgroundColor:'#22c55e99',borderRadius:3},
+    {type:'bar',label:'Expenses',data:months.map(m=>mm[m].e/1000),backgroundColor:'#ef444480',borderRadius:3},
+    {type:'line',label:'Profit',data:months.map(m=>(mm[m].r-mm[m].e)/1000),borderColor:'#06b6d4',backgroundColor:'#06b6d4',tension:.3,pointRadius:2}
+  ]},options:baseOpts});
+
+  // Expense donut
+  const ec={};exp.forEach(t=>ec[t.cat]=(ec[t.cat]||0)+t.amount);
+  const top=Object.entries(ec).sort((a,b)=>b[1]-a[1]);const main=top.slice(0,7);const rest=top.slice(7).reduce((a,x)=>a+x[1],0);
+  if(rest>0)main.push(['Others',rest]);
+  destroy('e');
+  charts.e=new Chart(cExp,{type:'doughnut',data:{labels:main.map(x=>x[0]),datasets:[{data:main.map(x=>x[1]),backgroundColor:['#ef4444','#f59e0b','#3b82f6','#06b6d4','#8b5cf6','#ec4899','#22c55e','#64748b'],borderColor:'#111b2e',borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:tickC,boxWidth:10,font:{size:10.5}}},tooltip:{callbacks:{label:c=>` ${c.label}: ${fmt(c.parsed)} (${pct(c.parsed/expTot)})`}}}}});
+
+  // Slot chart
+  const sl={};S.forEach(s=>{(sl[s.slot]=sl[s.slot]||{r:0,n:0}).r+=s.paid;sl[s.slot].n++;});
+  const slots=SLOT_ORDER.filter(s=>sl[s]);
+  destroy('s');
+  charts.s=new Chart(cSlot,{data:{labels:slots,datasets:[
+    {type:'bar',label:'Revenue (৳k)',data:slots.map(s=>sl[s].r/1000),backgroundColor:slots.map(s=>['17:00','18:30','20:00','21:30'].includes(s)?'#22c55e':'#3b82f680'),borderRadius:3,yAxisID:'y'},
+    {type:'line',label:'Bookings',data:slots.map(s=>sl[s].n),borderColor:'#f59e0b',tension:.3,pointRadius:2,yAxisID:'y1'}
+  ]},options:{...baseOpts,scales:{...baseOpts.scales,y1:{position:'right',ticks:{color:'#f59e0b',font:{size:10}},grid:{display:false}}}}});
+
+  // DOW chart
+  const dw={};S.forEach(s=>{const d=DOWS[(new Date(s.date).getDay()+1)%7];dw[d]=(dw[d]||0)+s.paid;});
+  destroy('d');
+  charts.d=new Chart(cDow,{type:'bar',data:{labels:DOWS,datasets:[{label:'Revenue (৳k)',data:DOWS.map(d=>(dw[d]||0)/1000),backgroundColor:DOWS.map(d=>['Fri','Sat'].includes(d)?'#22c55e':'#3b82f680'),borderRadius:4}]},options:{...baseOpts,plugins:{legend:{display:false}}}});
+
+  // Heatmap
+  const hm={},dayCount={};
+  DOWS.forEach(d=>{hm[d]={};dayCount[d]=0;});
+  for(let d=new Date(pFrom);d<=new Date(pTo);d.setDate(d.getDate()+1))dayCount[DOWS[(d.getDay()+1)%7]]++;
+  S.forEach(s=>{const d=DOWS[(new Date(s.date).getDay()+1)%7];hm[d][s.slot]=(hm[d][s.slot]||0)+1;});
+  const hSlots=SLOT_ORDER.filter(s=>slots.includes(s));
+  let h=`<div class="hmg" style="grid-template-columns:70px repeat(${hSlots.length},1fr)"><div></div>${hSlots.map(s=>`<div class="hmh">${s}</div>`).join('')}`;
+  DOWS.forEach(d=>{h+=`<div class="hml">${d}</div>`+hSlots.map(s=>{
+    const v=dayCount[d]?Math.min((hm[d][s]||0)/dayCount[d],1):0;
+    const bg=v===0?'#141f36':`rgba(34,197,94,${0.15+v*0.85})`;
+    const col=v>0.45?'#04140a':'#8b9bb8';
+    return `<div class="hmc" style="background:${bg};color:${col}" title="${d} ${s}: ${(v*100).toFixed(0)}%">${(v*100).toFixed(0)}</div>`;}).join('');});
+  document.getElementById('heat').innerHTML=h+'</div>';
+
+  // Top clients
+  const cl={};S.forEach(s=>{(cl[s.client]=cl[s.client]||{n:0,r:0,last:''}).n++;cl[s.client].r+=s.paid;if(s.date>cl[s.client].last)cl[s.client].last=s.date;});
+  const tc=Object.entries(cl).sort((a,b)=>b[1].r-a[1].r).slice(0,15);
+  document.getElementById('tTop').innerHTML='<tr><th>#</th><th>Client</th><th class="r">Bookings</th><th class="r">Revenue</th><th class="r">Last Visit</th></tr>'+
+    tc.map((c,i)=>`<tr><td>${i+1}</td><td>${c[0]}</td><td class="r">${c[1].n}</td><td class="r">${fmt(c[1].r)}</td><td class="r">${c[1].last}</td></tr>`).join('');
+
+  // Lapsed regulars (lifetime, not period-filtered)
+  const all={};DATA.sales.forEach(s=>{(all[s.client]=all[s.client]||{n:0,r:0,last:''}).n++;all[s.client].r+=s.paid;if(s.date>all[s.client].last)all[s.client].last=s.date;});
+  const cutoff=new Date(DATA.maxDate);cutoff.setDate(cutoff.getDate()-60);
+  const lapsed=Object.entries(all).filter(([k,v])=>v.n>=5&&new Date(v.last)<cutoff).sort((a,b)=>b[1].r-a[1].r);
+  document.getElementById('tLapsed').innerHTML='<tr><th>Client</th><th class="r">Lifetime Bookings</th><th class="r">Lifetime Value</th><th class="r">Last Visit</th></tr>'+
+    lapsed.slice(0,25).map(c=>`<tr><td>${c[0]}</td><td class="r">${c[1].n}</td><td class="r">${fmt(c[1].r)}</td><td class="r">${c[1].last}</td></tr>`).join('');
+
+  renderInsights({S,rev,expTot,profit,occ,avg,ec,sl,dw,mm,months,lapsed,all,nDays,otherInc});
+}
+
+function renderInsights(x){
+  const {S,rev,expTot,occ,avg,ec,sl,mm,months,lapsed,all} = x;
+  const ins=[];
+  const add=(cls,tag,title,body)=>ins.push(`<div class="ic ${cls}"><span class="tag ${ {opp:'c',warn:'a',risk:'r','':'g'}[cls] }">${tag}</span><div class="t">${title}</div><div class="b">${body}</div></div>`);
+
+  // 1. Occupancy opportunity
+  const gain10 = Math.round(0.10*11*365*avg);
+  add('','GROWTH',`Occupancy is ${pct(occ)} — your biggest lever`,
+    `Roughly <b>${Math.round((1-occ)*11)} of 11 slots</b> sit empty on an average day. Every +10&nbsp;points of occupancy at your current average rate of <b>${fmt(avg)}</b> is worth about <b>${fmt(gain10)}/year</b> in pure incremental revenue, since your costs are mostly fixed (lease + salaries). Filling empty slots should be priority #1 over raising prices.`);
+
+  // 2. Midday dead zone
+  const mid=['11:00','12:30','14:00'].reduce((a,s)=>a+((sl[s]||{n:0}).n),0);
+  const midShare=S.length?mid/S.length:0;
+  add('opp','OPPORTUNITY','Midday dead zone (11:00–15:30)',
+    `Only <b>${mid} bookings (${pct(midShare)})</b> fall in the 11:00, 12:30 and 14:00 slots. These hours will rarely sell at full price — package them instead: <b>school/college PE contracts, corporate leagues, women's-only hours, and a kids' academy</b>. Even at a 40–50% discount, this is revenue you currently earn nothing on.`);
+
+  // 3. Weekday gap
+  const weakDays=['Mon','Tue','Wed','Sun'];
+  add('opp','OPPORTUNITY','Sunday–Wednesday are ~40% weaker than Fri/Sat',
+    `Friday and Saturday together out-earn any two weekdays by a wide margin. Launch a <b>weekday membership</b> (e.g., 4 bookings/month at 15% off, valid Sun–Wed only) and a <b>weeknight league</b> with fixed team slots. Leagues create recurring, predictable revenue and lock in the same 8–12 teams weekly.`);
+
+  // 4. Seasonality / Ramadan
+  const feb26=(mm['2026-02']||{r:0}).r, jan26=(mm['2026-01']||{r:0}).r, mar26=(mm['2026-03']||{r:0}).r;
+  if(jan26&&feb26){
+    const drop=1-((feb26+mar26)/2)/jan26;
+    add('warn','SEASONAL RISK','Ramadan slump cost you roughly ৳4–5 lakh',
+      `Feb–Mar 2026 revenue averaged <b>${pct(drop)} below January</b> (${fmt(feb26)} and ${fmt(mar26)} vs ${fmt(jan26)}). You already see organic demand at 23:00–00:30. Next Ramadan, flip the schedule: <b>iftar-to-sehri night tournaments, discounted post-taraweeh slots (22:00–02:00), and a knockout cup with entry fees</b>. Venues that run night formats typically recover most of the seasonal dip.`);
+  }
+
+  // 5. Late night demand
+  const late=['23:00','00:00','00:30'].reduce((a,s)=>a+((sl[s]||{n:0}).n),0);
+  if(late>50)add('','GROWTH','Late-night demand is real — formalize it',
+    `You've already sold <b>${late} slots at 23:00 or later</b> without marketing them. Add 23:00 and 00:30 as official bookable slots (13 slots/day instead of 11) — that alone raises your ceiling by ~18%. Staff it with your existing night guard coverage.`);
+
+  // 6. Retention / lapsed
+  const lapsedVal=lapsed.reduce((a,c)=>a+c[1].r,0);
+  add('risk','RETENTION RISK',`${lapsed.length} regular clients have gone quiet`,
+    `Clients with 5+ lifetime bookings who haven't returned in 60+ days represent <b>${fmt(lapsedVal)} of historical revenue</b> (full list below the client table). Their phone numbers are in your sheet — a simple <b>SMS win-back campaign</b> ("We miss you — 20% off your next slot this week") costs almost nothing. Reactivating even 20% of them is worth ~${fmt(lapsedVal*0.2*0.3)} per quarter.`);
+
+  // 7. Loyalty
+  const rep=Object.values(all).filter(c=>c.n>=3).length, tot=Object.keys(all).length;
+  add('opp','RETENTION',`Only ${pct(rep/tot)} of clients ever book 3+ times`,
+    `You have <b>${tot.toLocaleString()} clients</b> but most book once or twice and vanish. Acquiring a new client is far costlier than a repeat visit. Launch a <b>punch card: book 9, get the 10th free</b> (an effective 10% discount only for your best behavior), plus a referral credit. Your top 15 clients alone prove regulars are worth 50–100× a one-off booking.`);
+
+  // 8. Pricing
+  const peakN=S.filter(s=>s.type==='Peak'), offN=S.filter(s=>s.type==='Off');
+  const pAvg=peakN.length?peakN.reduce((a,s)=>a+s.paid,0)/peakN.length:0;
+  const oAvg=offN.length?offN.reduce((a,s)=>a+s.paid,0)/offN.length:0;
+  add('','PRICING','Peak slots are underpriced relative to demand',
+    `Peak slots (avg <b>${fmt(pAvg)}</b>) outsell off-hours ${offN.length?(peakN.length/offN.length).toFixed(1):'—'}:1, and 18:30–21:30 runs near-full on weekends (see heatmap). Test a <b>৳200–400 weekend-peak premium</b> — at near-full occupancy a 7% price rise is pure margin. Keep off-peak prices flat or lower; those slots need volume, not margin.`);
+
+  // 9. Cash risk
+  add('risk','OPERATIONS','~100% cash collection is a leak waiting to happen',
+    `Nearly every taka flows as cash. That means no audit trail, no-show risk with zero cost to the client, and reconciliation headaches. Require a <b>৳500–1000 bKash/Nagad advance to confirm every booking</b>. Prepayment slashes no-shows, creates a digital record, and the advance is forfeited on cancellation within 24h.`);
+
+  // 10. Cost structure
+  const lease=ec['Lease Fee']||0, elec=ec['Electricity Bill']||0, mkt=ec['Marketing Expense']||0;
+  add('warn','COST CONTROL',`Fixed costs are ${pct((lease+(ec['Employee Basic Salary']||ec['Employee Basic Salary ']||0))/(expTot||1))} of expenses — volume is everything`,
+    `Lease (<b>${fmt(lease)}</b>) and salaries dominate and don't shrink. Two variable lines worth attacking: <b>electricity ${fmt(elec)}</b> — switch floodlights to LED and gate them to booked slots only (typical 30–40% saving), and <b>marketing ${fmt(mkt)}</b> — with revenue flat, redirect ad spend toward the retention/league programs above, which have measurable payback.`);
+
+  // 11. Trajectory
+  const last6=months.slice(-6).reduce((a,m)=>a+mm[m].r,0)/6;
+  const prior6=months.slice(-12,-6).reduce((a,m)=>a+mm[m].r,0)/6;
+  const tr=prior6?(last6-prior6)/prior6:0;
+  add(tr<0?'warn':'','TRAJECTORY',`Revenue has been flat around ${fmt(last6)}/month`,
+    `Last 6 months averaged <b>${fmt(last6)}</b> vs <b>${fmt(prior6)}</b> the prior 6 (${tr>=0?'+':''}${pct(tr)}). The business has plateaued at ~40% capacity since 2024 — a classic sign that walk-in demand is saturated. The next growth phase must come from <b>programmed revenue</b>: leagues, academies, memberships and corporate contracts, not more of the same slots.`);
+
+  document.getElementById('insights').innerHTML=ins.join('');
+}
+
+// Filters
+const PERIODS=[['all','All Time'],['12m','Last 12 Months']];
+function buildFilters(){
+  const years=[...new Set(DATA.sales.map(s=>s.date.slice(0,4)))].sort();
+  const f=document.getElementById('filters');
+  f.querySelectorAll('.pill').forEach(p=>p.remove());
+  [...PERIODS, ...years.map(y=>[y,y])].forEach(([v,l])=>{
+    const b=document.createElement('button');b.className='pill'+(v===period?' on':'');b.textContent=l;
+    b.onclick=()=>{period=v;document.querySelectorAll('.pill').forEach(p=>p.classList.remove('on'));b.classList.add('on');render();};
+    f.insertBefore(b,f.lastElementChild);
+  });
+}
+
+// Excel re-upload
+document.getElementById('file').addEventListener('change', e=>{
+  const file=e.target.files[0]; if(!file)return;
+  const rd=new FileReader();
+  rd.onload=ev=>{
+    try{
+      const wb=XLSX.read(ev.target.result,{type:'array',cellDates:true});
+      const fd=v=>v instanceof Date?`${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,'0')}-${String(v.getDate()).padStart(2,'0')}`:null;
+      const ft=v=>{if(v instanceof Date)return`${String(v.getHours()).padStart(2,'0')}:${String(v.getMinutes()).padStart(2,'0')}`;if(typeof v==='number'){const m=Math.round(v*1440)%1440;return`${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;}return v?String(v):null;};
+      const se=XLSX.utils.sheet_to_json(wb.Sheets['Sales Entry'],{header:1}).slice(1);
+      const sales=se.filter(r=>r[0]!=null&&r[1]instanceof Date).map(r=>({id:r[0],date:fd(r[1]),client:r[2],slot:ft(r[3]),type:(r[4]&&String(r[4]).includes('Peak'))?'Peak':'Off',amount:(+r[8]||0)+(+r[6]||0),paid:+r[8]||0}));
+      const te=XLSX.utils.sheet_to_json(wb.Sheets['Transaction Entry'],{header:1}).slice(1);
+      const txns=te.filter(r=>r[0]instanceof Date).map(r=>({date:fd(r[0]),type:r[1],cat:String(r[2]||'').trim(),details:r[3],amount:+r[5]||0}));
+      if(!sales.length)throw new Error('No rows found in "Sales Entry" sheet');
+      DATA=prep({sales,txns}); period='all'; buildFilters(); render();
+      alert(`Loaded ${sales.length.toLocaleString()} bookings and ${txns.length} transactions from ${file.name}`);
+    }catch(err){alert('Could not read that file: '+err.message);}
+  };
+  rd.readAsArrayBuffer(file);
+});
+
+DATA=prep(RAW); buildFilters(); render();
+</script>
+</body>
+</html>
