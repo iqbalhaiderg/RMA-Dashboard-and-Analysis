@@ -60,7 +60,7 @@ footer{color:var(--mut);font-size:11.5px;margin-top:26px;text-align:center}
 <body>
 <header>
   <div>
-    <h1>⚽ RMA Turf <span class="pitch">Business Dashboard</span></h1>
+    <h1>⚽ RMA Turf <span class="pitch">Business Dashboard</span> <span id="live" style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:12px;background:#3a2a08;color:#f59e0b;vertical-align:middle">⏳ connecting…</span></h1>
     <div class="sub" id="sub"></div>
   </div>
   <div class="controls" id="filters">
@@ -492,7 +492,71 @@ document.getElementById('file').addEventListener('change', e=>{
   rd.readAsArrayBuffer(file);
 });
 
-DATA=prep(RAW); buildFilters(); render();
+// ---- LIVE DATA from Google Sheet (gviz CSV; falls back to embedded snapshot) ----
+const SHEET_ID='1OIjRR81oF6q5vehJzTRZelPOCLIEoTE3ut5Mg1VMeh8';
+const GV=(sheet,tq)=>`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet)}&tq=${encodeURIComponent(tq)}`;
+function parseCSV(text){
+  const rows=[];let row=[],cur='',q=false;
+  for(let i=0;i<text.length;i++){const ch=text[i];
+    if(q){ if(ch==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=ch; }
+    else if(ch==='"')q=true;
+    else if(ch===','){row.push(cur);cur='';}
+    else if(ch==='\n'){row.push(cur);cur='';if(row.some(c=>c!==''))rows.push(row);row=[];}
+    else if(ch!=='\r')cur+=ch;
+  }
+  if(cur!==''||row.length){row.push(cur);if(row.some(c=>c!==''))rows.push(row);}
+  return rows;
+}
+const MONN={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+function pDate(s){
+  const m=String(s||'').trim().match(/^(\d{1,2})[-\/\s]([A-Za-z]{3})[a-z]*[-\/\s](\d{2,4})$/);
+  if(m){let y=+m[3];if(y<100)y+=2000;const mo=MONN[m[2].slice(0,3).toLowerCase()];if(!mo)return null;
+    return `${y}-${String(mo).padStart(2,'0')}-${String(+m[1]).padStart(2,'0')}`;}
+  const m2=String(s||'').trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m2?m2[0]:null;
+}
+function pSlot(v){
+  const m=String(v||'').trim().match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i);
+  if(!m)return null;let h=+m[1];const ap=m[3];
+  if(ap){if(/pm/i.test(ap)&&h!==12)h+=12;if(/am/i.test(ap)&&h===12)h=0;}
+  return `${String(h).padStart(2,'0')}:${m[2]}`;
+}
+const num=v=>+String(v||'0').replace(/,/g,'')||0;
+async function loadLive(){
+  const badge=document.getElementById('live');
+  try{
+    const [sr,tr]=await Promise.all([
+      fetch(GV('Sales Entry','select A,B,C,D,E,F,I where B is not null')),
+      fetch(GV('Transaction Entry','select A,B,C,D,F where A is not null'))
+    ]);
+    if(!sr.ok||!tr.ok)throw new Error('fetch failed');
+    const [st,tt]=await Promise.all([sr.text(),tr.text()]);
+    const sales=[];
+    parseCSV(st).slice(1).forEach(r=>{
+      const dt=pDate(r[1]),slot=pSlot(r[3]);
+      if(!dt||!slot)return;
+      const status=String(r[5]||'');
+      if(/cancel|not show/i.test(status))return;
+      const paid=num(r[6]);
+      sales.push({id:+r[0]||0,date:dt,client:String(r[2]||'').trim(),slot,type:/peak/i.test(r[4]||'')?'Peak':'Off',amount:paid,paid});
+    });
+    const txns=[];
+    parseCSV(tt).slice(1).forEach(r=>{
+      const dt=pDate(r[0]);
+      if(!dt)return;
+      txns.push({date:dt,type:String(r[1]||'').trim(),cat:String(r[2]||'').trim(),details:r[3],amount:num(r[4])});
+    });
+    if(sales.length<1000)throw new Error('too few rows — sheet structure changed?');
+    DATA=prep({sales,txns});
+    badge.textContent='● LIVE — synced with Google Sheet ('+DATA.maxDate+')';
+    badge.style.background='#123524';badge.style.color='#22c55e';
+    buildFilters();render();
+  }catch(e){
+    badge.textContent='● OFFLINE — snapshot of '+DATA.maxDate;
+    badge.style.background='#3a1414';badge.style.color='#f87171';
+  }
+}
+DATA=prep(RAW); buildFilters(); render(); loadLive();
 </script>
 </body>
 </html>
