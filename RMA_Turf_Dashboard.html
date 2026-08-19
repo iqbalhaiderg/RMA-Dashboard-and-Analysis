@@ -526,8 +526,8 @@ async function loadLive(){
   const badge=document.getElementById('live');
   try{
     const [sr,tr]=await Promise.all([
-      fetch(GV('Sales Entry','select A,B,C,D,E,F,I where B is not null')),
-      fetch(GV('Transaction Entry','select A,B,C,D,F where A is not null'))
+      fetch(GV('Sales Entry','select A,B,C,D,E,F,I')),
+      fetch(GV('Transaction Entry','select A,B,C,D,F'))
     ]);
     if(!sr.ok||!tr.ok)throw new Error('fetch failed');
     const [st,tt]=await Promise.all([sr.text(),tr.text()]);
@@ -546,9 +546,17 @@ async function loadLive(){
       if(!dt)return;
       txns.push({date:dt,type:String(r[1]||'').trim(),cat:String(r[2]||'').trim(),details:r[3],amount:num(r[4])});
     });
-    if(sales.length<1000)throw new Error('too few rows — sheet structure changed?');
-    DATA=prep({sales,txns});
-    badge.textContent='● LIVE — synced with Google Sheet ('+DATA.maxDate+')';
+    if(sales.length<300)throw new Error('too few rows — sheet structure changed?');
+    // The live sheet is a yearly file (2026 onward). Merge with the embedded
+    // archive: keep archived rows BEFORE the live sheet's own start date,
+    // and take everything from the live sheet after that.
+    const liveSalesMin=sales.reduce((a,s)=>s.date<a?s.date:a, sales[0].date);
+    const liveTxnMin=txns.length?txns.reduce((a,t)=>t.date<a?t.date:a, txns[0].date):'9999';
+    const histSales=RAW.sales.filter(s=>{const sl=normSlot(s.slot);return sl&&s.date<liveSalesMin;})
+      .map(s=>({...s,slot:normSlot(s.slot)}));
+    const histTxns=RAW.txns.filter(t=>t.date<liveTxnMin);
+    DATA=prep({sales:histSales.concat(sales), txns:histTxns.concat(txns)});
+    badge.textContent='● LIVE — sheet ('+liveSalesMin+' → '+DATA.maxDate+') + archive';
     badge.style.background='#123524';badge.style.color='#22c55e';
     buildFilters();render();
   }catch(e){
