@@ -88,7 +88,7 @@ firebase.auth().signInAnonymously().catch(e=>console.error(e));
 let selDate = null, selSlot = null, unsub = null, SLOTCFG = null;
 const $ = id => document.getElementById(id);
 const fmt = n => '৳'+n.toLocaleString('en-IN');
-const todayStr = () => { const d=new Date(); return d.toISOString().slice(0,10); };
+const todayStr = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
 
 function applySlotCfg(cfg){
   SLOTCFG=cfg;
@@ -109,7 +109,7 @@ function buildDates(){
   const now=new Date();
   for(let i=0;i<VENUE.bookAheadDays;i++){
     const d=new Date(now); d.setDate(d.getDate()+i);
-    const ds=d.toISOString().slice(0,10);
+    const ds=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
     const div=document.createElement('div');
     div.className='dch'+(d.getDay()===5||d.getDay()===6?' fri':'')+(i===0?' on':'');
     div.innerHTML=`<div class="d1">${d.toLocaleDateString('en-GB',{weekday:'short'})}</div><div class="d2">${d.getDate()}</div><div class="d1">${d.toLocaleDateString('en-GB',{month:'short'})}</div>`;
