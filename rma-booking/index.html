@@ -87,7 +87,7 @@ firebase.auth().signInAnonymously().catch(e=>console.error(e));
 
 let selDate = null, selSlot = null, unsub = null, SLOTCFG = null;
 const $ = id => document.getElementById(id);
-const fmt = n => '৳++n.toLocaleString('en-IN');
+const fmt = n => '৳'+n.toLocaleString('en-IN');
 const todayStr = () => { const d=new Date(); return d.toISOString().slice(0,10); };
 
 function applySlotCfg(cfg){
