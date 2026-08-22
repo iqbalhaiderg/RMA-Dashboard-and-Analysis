@@ -294,6 +294,7 @@ async function rejectBk(id){
   if(!confirm('Remove this booking? The slot becomes available again.'))return;
   await db.collection('bookings').doc(id).delete(); toast('Removed');
     renderCal(); loadAllBookings();
+}
 
 async function payBk(id,price,paid){
   const amt=prompt('Total paid amount (price '+price+', already recorded '+paid+'):',price);
