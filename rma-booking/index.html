@@ -85,10 +85,24 @@ firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 firebase.auth().signInAnonymously().catch(e=>console.error(e));
 
-let selDate = null, selSlot = null, unsub = null;
+let selDate = null, selSlot = null, unsub = null, SLOTCFG = null;
 const $ = id => document.getElementById(id);
-const fmt = n => '৳'+n.toLocaleString('en-IN');
+const fmt = n => '৳++n.toLocaleString('en-IN');
 const todayStr = () => { const d=new Date(); return d.toISOString().slice(0,10); };
+
+function applySlotCfg(cfg){
+  SLOTCFG=cfg;
+  window.slotPrice=function(dateStr,slotT){
+    const d=new Date(dateStr+'T00:00:00'); const we=d.getDay()===5||d.getDay()===6;
+    const catName=(we?cfg.we:cfg.wd)[slotT];
+    return (cfg.categories && cfg.categories[catName]!=null)?cfg.categories[catName]:0;
+  };
+}
+function loadSlotCfg(){
+  db.collection('settings').doc('slots').onSnapshot(doc=>{
+    if(doc.exists){ applySlotCfg(doc.data()); if(selDate) loadDay(selDate); }
+  });
+}
 
 function buildDates(){
   const el=$('dates'); el.innerHTML='';
@@ -119,7 +133,10 @@ function renderSlots(ds,taken){
   const el=$('slots'); el.innerHTML='';
   const isToday = ds===todayStr();
   const nowMin = new Date().getHours()*60+new Date().getMinutes();
+  let shown=0;
   SLOTS.forEach(s=>{
+    if(SLOTCFG && SLOTCFG.active && SLOTCFG.active[s.t]===false) return;
+    shown++;
     const st=taken[s.t];
     const [h,m]=s.t.split(':').map(Number);
     const past = isToday && (h*60+m) < nowMin;
@@ -193,7 +210,7 @@ async function loadMyBookings(){
   });
 }
 
-buildDates(); loadDay(selDate); loadMyBookings();
+buildDates(); loadSlotCfg(); loadDay(selDate); loadMyBookings();
 </script>
 </body>
 </html>

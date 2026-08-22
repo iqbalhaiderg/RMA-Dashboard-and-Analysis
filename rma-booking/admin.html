@@ -107,15 +107,25 @@ td{padding:7px 6px;border-bottom:1px solid #16223a}
   </div>
 
   <div class="pane" id="pSet">
+    <div class="card"><h3>💰 Slot Categories &amp; Pricing</h3>
+      <div class="mini" style="margin-bottom:8px">Set a price per category, then assign every slot to a category below.</div>
+      <div id="catList"></div>
+      <div class="row" style="margin-top:8px"><div><input id="catName" placeholder="New category name"></div><div style="flex:0 0 130px"><input id="catPrice" type="number" placeholder="Price BDT"></div></div>
+      <button class="btn" onclick="addCategory()">Add Category</button>
+    </div>
+    <div class="card"><h3>🗓 Assign Slots &amp; Availability</h3>
+      <div class="mini" style="margin-bottom:8px">Pick a category per slot for weekdays vs weekends (Fri/Sat), and switch a slot off if it's not being sold.</div>
+      <div style="overflow-x:auto"><table id="slotAssignTable"></table></div>
+    </div>
     <div class="card"><h3>🏷 Income / Expense Heads</h3>
       <div class="row"><div><input id="hName" placeholder="New head name"></div><div style="flex:0 0 110px"><select id="hType"><option>Expense</option><option>Income</option></select></div></div>
       <button class="btn" onclick="addHead()">Add Head</button>
       <div id="hList" class="mini" style="margin-top:10px;line-height:2"></div></div>
     <div class="card"><h3>👥 Admin Users</h3>
-      <div class="mini" style="line-height:1.6">Admins sign in with email/password. To add one: create the user in Firebase Console → Authentication → Add user, then add their UID here. Owners can manage settings; staff can manage bookings &amp; finance.</div>
-      <div class="row" style="margin-top:8px"><div><input id="aUid" placeholder="New admin UID"></div><div style="flex:0 0 110px"><select id="aRole"><option>staff</option><option>owner</option></select></div></div>
+      <div class="mini" style="line-height:1.6">Admins sign in with email/password. To add one: create the user in Firebase Console → Authentication → Add user, then add them here (email + UID). Owners can manage settings and reset staff passwords; staff can manage bookings &amp; finance.</div>
+      <div class="row" style="margin-top:8px"><div><input id="aEmail" placeholder="Admin email" type="email"></div><div><input id="aUid" placeholder="Admin UID"></div><div style="flex:0 0 110px"><select id="aRole"><option>staff</option><option>owner</option></select></div></div>
       <button class="btn" onclick="addAdmin()">Add Admin</button>
-      <div id="aList" class="mini" style="margin-top:10px;line-height:2"></div></div>
+      <div id="aList" style="margin-top:10px"></div></div>
   </div>
 </main>
 </div>
@@ -150,7 +160,10 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
 });
 function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',3500);}
 
-function slotSel(sel){sel.innerHTML=SLOTS.map(s=>`<option value="${s.t}">${s.label}</option>`).join('');}
+function slotSel(sel){
+  const active=SLOTCFG?SLOTCFG.active:null;
+  sel.innerHTML=SLOTS.filter(s=>!active||active[s.t]!==false).map(s=>`<option value="${s.t}">${s.label}</option>`).join('');
+}
 function methodSel(sel){sel.innerHTML=PAY_METHODS.map(m=>`<option>${m}</option>`).join('');}
 
 function init(){
@@ -159,8 +172,73 @@ function init(){
   $('mDate').onchange=$('mSlot').onchange=()=>{$('mPrice').value=slotPrice($('mDate').value,$('mSlot').value);};
   $('mPrice').value=slotPrice($('mDate').value,$('mSlot').value);
   $('calDate').onchange=()=>renderCal();
-  watchRequests(); renderCal(); loadHeads(); loadTxns(); loadAdmins();
+  watchRequests(); renderCal(); loadHeads(); loadTxns(); loadAdmins(); loadSlotCfg();
 }
+
+// ---- Slot categories, pricing & availability ----
+let SLOTCFG=null;
+function defaultSlotCfg(){
+  const categories={'Off Peak':PRICES.wdDay,'Peak Hour':PRICES.wdEve,'Weekend Day':PRICES.weDay,'Night':PRICES.weEve};
+  const wd={},we={},active={};
+  SLOTS.forEach(s=>{ wd[s.t]=s.eve?'Peak Hour':'Off Peak'; we[s.t]=s.eve?'Night':'Weekend Day'; active[s.t]=true; });
+  return {categories,wd,we,active};
+}
+function applySlotCfg(cfg){
+  SLOTCFG=cfg;
+  window.slotPrice=function(dateStr,slotT){
+    const d=new Date(dateStr+'T00:00:00'); const we=d.getDay()===5||d.getDay()===6;
+    const catName=(we?cfg.we:cfg.wd)[slotT];
+    return (cfg.categories && cfg.categories[catName]!=null)?cfg.categories[catName]:0;
+  };
+}
+function loadSlotCfg(){
+  const ref=db.collection('settings').doc('slots');
+  ref.onSnapshot(doc=>{
+    if(!doc.exists){ ref.set(defaultSlotCfg()); return; }
+    applySlotCfg(doc.data());
+    renderSlotSettings();
+    slotSel($('mSlot'));
+    $('mPrice').value=slotPrice($('mDate').value,$('mSlot').value);
+    renderCal();
+  });
+}
+function renderSlotSettings(){
+  if(!SLOTCFG)return;
+  const catNames=Object.keys(SLOTCFG.categories);
+  $('catList').innerHTML=catNames.map(n=>`<div class="row" style="align-items:center;margin-bottom:6px"><div style="flex:2">${n}</div><div style="flex:0 0 130px"><input type="number" value="${SLOTCFG.categories[n]}" onchange="updateCatPrice('${n}',this.value)"></div><div style="flex:0 0 30px;text-align:center;cursor:pointer;color:var(--red)" onclick="deleteCategory('${n}')">✕</div></div>`).join('');
+  let rows='<tr><th>Slot</th><th>Weekday</th><th>Weekend</th><th>Active</th></tr>';
+  SLOTS.forEach(s=>{
+    const wdOpts=catNames.map(n=>`<option ${SLOTCFG.wd[s.t]===n?'selected':''}>${n}</option>`).join('');
+    const weOpts=catNames.map(n=>`<option ${SLOTCFG.we[s.t]===n?'selected':''}>${n}</option>`).join('');
+    const active=SLOTCFG.active[s.t]!==false;
+    rows+=`<tr><td>${s.label}</td>
+      <td><select onchange="updateSlotAssign('${s.t}','wd',this.value)">${wdOpts}</select></td>
+      <td><select onchange="updateSlotAssign('${s.t}','we',this.value)">${weOpts}</select></td>
+      <td style="text-align:center"><input type="checkbox" ${active?'checked':''} onchange="updateSlotActive('${s.t}',this.checked)"></td></tr>`;
+  });
+  $('slotAssignTable').innerHTML=rows;
+}
+async function updateCatPrice(name,val){ SLOTCFG.categories[name]=+val||0; await saveSlotCfg(); }
+async function deleteCategory(name){
+  const names=Object.keys(SLOTCFG.categories);
+  if(names.length<=1){toast('Keep at least one category');return;}
+  if(!confirm('Delete category "'+name+'"? Slots using it move to the first remaining category.'))return;
+  delete SLOTCFG.categories[name];
+  const fallback=Object.keys(SLOTCFG.categories)[0];
+  Object.keys(SLOTCFG.wd).forEach(t=>{if(SLOTCFG.wd[t]===name)SLOTCFG.wd[t]=fallback;});
+  Object.keys(SLOTCFG.we).forEach(t=>{if(SLOTCFG.we[t]===name)SLOTCFG.we[t]=fallback;});
+  await saveSlotCfg();
+}
+async function addCategory(){
+  const n=$('catName').value.trim(), p=+$('catPrice').value||0;
+  if(!n)return;
+  SLOTCFG.categories[n]=p;
+  $('catName').value='';$('catPrice').value='';
+  await saveSlotCfg(); toast('Category added');
+}
+function updateSlotAssign(t,which,val){ SLOTCFG[which][t]=val; saveSlotCfg(); }
+function updateSlotActive(t,val){ SLOTCFG.active[t]=val; saveSlotCfg(); }
+async function saveSlotCfg(){ await db.collection('settings').doc('slots').set(SLOTCFG); }
 
 // ---- Requests ----
 function watchRequests(){
@@ -299,14 +377,25 @@ async function loadTxns(){
 async function loadAdmins(){
   const snap=await db.collection('admins').get().catch(()=>null);
   if(!snap)return;
-  let h='';snap.forEach(d=>h+=`${d.data().role==='owner'?'👑':'👤'} ${d.data().email||d.id} (${d.data().role})<br>`);
+  let h='';
+  snap.forEach(d=>{
+    const a=d.data();
+    h+=`<div class="row" style="align-items:center;margin-bottom:6px"><div class="mini">${a.role==='owner'?'👑':'👤'} ${a.email||d.id} (${a.role})</div>`+
+       (a.email?`<div style="flex:0 0 140px"><button class="btn ghost" style="margin:0;padding:6px 10px;font-size:11px" onclick="resetPw('${a.email}')">Reset password</button></div>`:'<div></div>')+
+       `</div>`;
+  });
   $('aList').innerHTML=h;
 }
 async function addAdmin(){
   if(MYROLE!=='owner'){toast('Only owners can add admins');return;}
-  const uid=$('aUid').value.trim(); if(!uid)return;
-  await db.collection('admins').doc(uid).set({role:$('aRole').value,addedBy:ME.email});
-  $('aUid').value=''; toast('Admin added'); loadAdmins();
+  const uid=$('aUid').value.trim(), email=$('aEmail').value.trim(); if(!uid)return;
+  await db.collection('admins').doc(uid).set({role:$('aRole').value,email:email||null,addedBy:ME.email});
+  $('aUid').value='';$('aEmail').value=''; toast('Admin added'); loadAdmins();
+}
+async function resetPw(email){
+  if(!confirm('Send a password reset email to '+email+'?'))return;
+  try{ await firebase.auth().sendPasswordResetEmail(email); toast('Reset email sent to '+email); }
+  catch(e){ toast('⚠ '+e.message); }
 }
 
 // ---- Google Sheet sync (optional webhook) ----
