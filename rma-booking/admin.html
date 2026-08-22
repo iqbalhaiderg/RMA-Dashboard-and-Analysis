@@ -150,6 +150,7 @@ firebase.initializeApp(FIREBASE_CONFIG);
 const db=firebase.firestore(); const $=id=>document.getElementById(id);
 const fmt=n=>'৳'+(+n||0).toLocaleString('en-IN');
 const todayStr=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+const localDateStr=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 let ME=null, MYROLE='staff';
 
 firebase.auth().onAuthStateChanged(async u=>{
