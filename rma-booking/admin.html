@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RMA Admin</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="config.js"></script>
+<style>
+:root{--bg:#0b1220;--card:#111b2e;--border:#1e2a44;--txt:#e6edf7;--mut:#8b9bb8;--grn:#22c55e;--amb:#f59e0b;--red:#ef4444;--blu:#3b82f6}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,'Segoe UI',sans-serif;padding-bottom:60px}
+header{background:#0e1626;padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:5}
+h1{font-size:16px} h1 span{color:var(--grn)}
+main{max-width:680px;margin:0 auto;padding:12px}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:14px}
+.tab{flex:0 0 auto;background:var(--card);border:1px solid var(--border);color:var(--mut);padding:8px 14px;border-radius:18px;font-size:13px;cursor:pointer}
+.tab.on{background:var(--grn);color:#04140a;font-weight:700;border-color:var(--grn)}
+.pane{display:none}.pane.on{display:block}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px}
+.card h3{font-size:14px;margin-bottom:10px}
+label{font-size:11.5px;color:var(--mut);display:block;margin:8px 0 3px}
+input,select{width:100%;background:#0e1626;border:1px solid var(--border);color:var(--txt);border-radius:8px;padding:10px;font-size:14px}
+.btn{background:var(--grn);color:#04140a;border:none;border-radius:9px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;margin-top:10px}
+.btn.warn{background:var(--amb)} .btn.danger{background:var(--red);color:#fff} .btn.ghost{background:transparent;color:var(--mut);border:1px solid var(--border)}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.bk{display:flex;justify-content:space-between;align-items:center;background:#0e1626;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:7px;font-size:13px;gap:8px;flex-wrap:wrap}
+.badge{font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:12px}
+.b-pen{background:#3a2a08;color:var(--amb)}.b-conf{background:#123524;color:var(--grn)}.b-bl{background:#2a1215;color:#f87171}
+.mini{font-size:11px;color:var(--mut)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px}
+.cell{background:#0e1626;border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:12px;cursor:pointer}
+.cell .st{font-size:10.5px;font-weight:700;margin-top:3px}
+.cell.av .st{color:var(--grn)}.cell.pen{border-color:var(--amb)}.cell.pen .st{color:var(--amb)}
+.cell.conf{border-color:#1f5c3b}.cell.conf .st{color:#f87171}
+#login{max-width:380px;margin:60px auto;padding:0 16px}
+.toast{position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#123524;color:var(--grn);border:1px solid #1f5c3b;padding:10px 18px;border-radius:12px;font-size:13px;z-index:30;display:none;max-width:92%}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;color:var(--mut);padding:6px;border-bottom:1px solid var(--border);font-size:11px}
+td{padding:7px 6px;border-bottom:1px solid #16223a}
+.r{text-align:right}
+.kpi3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px}
+.kpi3 .card{margin:0;text-align:center}.kpi3 .v{font-size:17px;font-weight:700}.kpi3 .l{font-size:10.5px;color:var(--mut)}
+</style>
+</head>
+<body>
+<div id="login">
+  <h1 style="margin-bottom:18px">⚽ RMA <span>Admin</span></h1>
+  <div class="card">
+    <label>Email</label><input id="lEmail" type="email" autocomplete="username">
+    <label>Password</label><input id="lPass" type="password" autocomplete="current-password">
+    <button class="btn" style="width:100%" onclick="login()">Sign In</button>
+    <div class="mini" id="lErr" style="color:var(--red);margin-top:8px"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+<header>
+  <h1>⚽ RMA <span>Admin</span></h1>
+  <div><span class="mini" id="who"></span> <button class="btn ghost" style="margin:0;padding:6px 12px" onclick="firebase.auth().signOut()">Out</button></div>
+</header>
+<main>
+  <div class="tabs">
+    <div class="tab on" data-p="pReq">Requests <span id="reqN"></span></div>
+    <div class="tab" data-p="pCal">Calendar</div>
+    <div class="tab" data-p="pMan">Manual Book</div>
+    <div class="tab" data-p="pFin">Finance</div>
+    <div class="tab" data-p="pSet">Settings</div>
+  </div>
+
+  <div class="pane on" id="pReq"><div id="reqList" class="card"><h3>⏳ Pending Requests</h3><div id="reqItems">Loading…</div></div>
+    <div class="card"><h3>✅ Upcoming Confirmed</h3><div id="confItems">Loading…</div></div></div>
+
+  <div class="pane" id="pCal">
+    <div class="card"><label>Date</label><input type="date" id="calDate">
+    <div class="grid" id="calGrid" style="margin-top:10px"></div>
+    <div class="mini" style="margin-top:8px">Tap an available cell to block it (maintenance); tap booked/pending to manage.</div></div>
+  </div>
+
+  <div class="pane" id="pMan">
+    <div class="card"><h3>📞 Manual Booking (phone/walk-in)</h3>
+      <div class="row"><div><label>Date</label><input type="date" id="mDate"></div><div><label>Slot</label><select id="mSlot"></select></div></div>
+      <div class="row"><div><label>Client name</label><input id="mName"></div><div><label>Phone</label><input id="mPhone" placeholder="01XXXXXXXXX"></div></div>
+      <div class="row"><div><label>Price (auto)</label><input id="mPrice" type="number"></div><div><label>Discount</label><input id="mDisc" type="number" value="0"></div></div>
+      <div class="row"><div><label>Paid now</label><input id="mPaid" type="number" value="0"></div><div><label>Method</label><select id="mMethod"></select></div></div>
+      <label>Status</label><select id="mStatus"><option value="confirmed">Confirmed</option><option value="pending">Pending</option></select>
+      <button class="btn" onclick="manualBook()">Save Booking</button>
+    </div>
+  </div>
+
+  <div class="pane" id="pFin">
+    <div class="kpi3">
+      <div class="card"><div class="v" id="fRev">–</div><div class="l">Income (this month)</div></div>
+      <div class="card"><div class="v" id="fExp">–</div><div class="l">Expenses (this month)</div></div>
+      <div class="card"><div class="v" id="fNet">–</div><div class="l">Net</div></div>
+    </div>
+    <div class="card"><h3>➕ New Entry</h3>
+      <div class="row"><div><label>Date</label><input type="date" id="tDate"></div><div><label>Type</label><select id="tType"><option>Expense</option><option>Income</option></select></div></div>
+      <div class="row"><div><label>Head</label><select id="tHead"></select></div><div><label>Method</label><select id="tMethod"></select></div></div>
+      <label>Details</label><input id="tDet" placeholder="e.g. Diesel 30 Litre">
+      <label>Amount (BDT)</label><input id="tAmt" type="number">
+      <button class="btn" onclick="saveTxn()">Save Entry</button>
+    </div>
+    <div class="card"><h3>📒 Recent Entries</h3><div style="max-height:300px;overflow:auto"><table id="tTable"></table></div></div>
+  </div>
+
+  <div class="pane" id="pSet">
+    <div class="card"><h3>🏷 Income / Expense Heads</h3>
+      <div class="row"><div><input id="hName" placeholder="New head name"></div><div style="flex:0 0 110px"><select id="hType"><option>Expense</option><option>Income</option></select></div></div>
+      <button class="btn" onclick="addHead()">Add Head</button>
+      <div id="hList" class="mini" style="margin-top:10px;line-height:2"></div></div>
+    <div class="card"><h3>👥 Admin Users</h3>
+      <div class="mini" style="line-height:1.6">Admins sign in with email/password. To add one: create the user in Firebase Console → Authentication → Add user, then add their UID here. Owners can manage settings; staff can manage bookings &amp; finance.</div>
+      <div class="row" style="margin-top:8px"><div><input id="aUid" placeholder="New admin UID"></div><div style="flex:0 0 110px"><select id="aRole"><option>staff</option><option>owner</option></select></div></div>
+      <button class="btn" onclick="addAdmin()">Add Admin</button>
+      <div id="aList" class="mini" style="margin-top:10px;line-height:2"></div></div>
+  </div>
+</main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+firebase.initializeApp(FIREBASE_CONFIG);
+const db=firebase.firestore(); const $=id=>document.getElementById(id);
+const fmt=n=>'৳'+(+n||0).toLocaleString('en-IN');
+const todayStr=()=>new Date().toISOString().slice(0,10);
+let ME=null, MYROLE='staff';
+
+firebase.auth().onAuthStateChanged(async u=>{
+  if(!u||u.isAnonymous){$('login').style.display='block';$('app').style.display='none';return;}
+  const adm=await db.collection('admins').doc(u.uid).get();
+  if(!adm.exists){$('lErr').textContent='This account is not an admin.';firebase.auth().signOut();return;}
+  ME=u; MYROLE=adm.data().role||'staff';
+  $('who').textContent=u.email+' ('+MYROLE+')';
+  $('login').style.display='none';$('app').style.display='block';
+  init();
+});
+async function login(){
+  $('lErr').textContent='';
+  try{await firebase.auth().signInWithEmailAndPassword($('lEmail').value.trim(),$('lPass').value);}
+  catch(e){$('lErr').textContent=e.message;}
+}
+
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.pane').forEach(x=>x.classList.remove('on'));
+  t.classList.add('on');$(t.dataset.p).classList.add('on');
+});
+function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',3500);}
+
+function slotSel(sel){sel.innerHTML=SLOTS.map(s=>`<option value="${s.t}">${s.label}</option>`).join('');}
+function methodSel(sel){sel.innerHTML=PAY_METHODS.map(m=>`<option>${m}</option>`).join('');}
+
+function init(){
+  ['mDate','calDate','tDate'].forEach(i=>$(i).value=todayStr());
+  slotSel($('mSlot')); methodSel($('mMethod')); methodSel($('tMethod'));
+  $('mDate').onchange=$('mSlot').onchange=()=>{$('mPrice').value=slotPrice($('mDate').value,$('mSlot').value);};
+  $('mPrice').value=slotPrice($('mDate').value,$('mSlot').value);
+  $('calDate').onchange=()=>renderCal();
+  watchRequests(); renderCal(); loadHeads(); loadTxns(); loadAdmins();
+}
+
+// ---- Requests ----
+function watchRequests(){
+  db.collection('bookings').where('status','==','pending').onSnapshot(snap=>{
+    const el=$('reqItems'); el.innerHTML=snap.empty?'<div class="mini">No pending requests 🎉</div>':'';
+    $('reqN').textContent=snap.empty?'':'('+snap.size+')';
+    const items=[];snap.forEach(d=>items.push({id:d.id,...d.data()}));
+    items.sort((a,b)=>(a.date+a.slot).localeCompare(b.date+b.slot));
+    items.forEach(b=>{
+      el.innerHTML+=`<div class="bk"><div><b>${b.date} ${b.slot}</b> · ${b.client}<div class="mini">${fmt(b.price)} · adv ${fmt(b.advance||0)} ${b.trxId?'· TrxID <b style="color:var(--amb)">'+b.trxId+'</b>':''} · ${b.source||'web'}</div></div>
+      <div><button class="btn" style="margin:0" onclick="confirmBk('${b.id}')">Confirm</button>
+      <button class="btn danger" style="margin:0" onclick="rejectBk('${b.id}')">Reject</button></div></div>`;
+    });
+  });
+  db.collection('bookings').where('status','==','confirmed').where('date','>=',todayStr()).onSnapshot(snap=>{
+    const el=$('confItems'); el.innerHTML=snap.empty?'<div class="mini">Nothing upcoming.</div>':'';
+    const items=[];snap.forEach(d=>items.push({id:d.id,...d.data()}));
+    items.sort((a,b)=>(a.date+a.slot).localeCompare(b.date+b.slot));
+    items.slice(0,30).forEach(b=>{
+      el.innerHTML+=`<div class="bk"><div><b>${b.date} ${b.slot}</b> · ${b.client}<div class="mini">${fmt(b.price)} · paid ${fmt(b.paid||0)} (${b.method||'—'})</div></div>
+      <div><button class="btn warn" style="margin:0" onclick="payBk('${b.id}',${b.price},${b.paid||0})">💰 Pay</button>
+      <button class="btn danger" style="margin:0" onclick="rejectBk('${b.id}')">✕</button></div></div>`;
+    });
+  });
+}
+async function confirmBk(id){
+  const ref=db.collection('bookings').doc(id);
+  const b=(await ref.get()).data();
+  const paid=prompt('Amount received now (advance already '+(b.advance||0)+'):', b.advance||0);
+  if(paid===null)return;
+  const method=prompt('Payment method ('+PAY_METHODS.join('/')+'):','Bkash');
+  await ref.update({status:'confirmed',paid:+paid||0,method:method||'Bkash',confirmedBy:ME.email,confirmedAt:firebase.firestore.FieldValue.serverTimestamp()});
+  syncSheet({...b,status:'confirmed',paid:+paid||0,method});
+  toast('Confirmed ✅');
+}
+async function rejectBk(id){
+  if(!confirm('Remove this booking? The slot becomes available again.'))return;
+  await db.collection('bookings').doc(id).delete(); toast('Removed');
+  renderCal();
+}
+async function payBk(id,price,paid){
+  const amt=prompt('Total paid amount (price '+price+', already recorded '+paid+'):',price);
+  if(amt===null)return;
+  const method=prompt('Method ('+PAY_METHODS.join('/')+'):','Cash');
+  await db.collection('bookings').doc(id).update({paid:+amt||0,method:method||'Cash',payStatus:+amt>=price?'Paid':'Partially paid'});
+  toast('Payment updated');
+}
+
+// ---- Calendar ----
+async function renderCal(){
+  const ds=$('calDate').value;
+  const snap=await db.collection('bookings').where('date','==',ds).get();
+  const map={};snap.forEach(d=>map[d.data().slot]={id:d.id,...d.data()});
+  const el=$('calGrid');el.innerHTML='';
+  SLOTS.forEach(s=>{
+    const b=map[s.t];
+    const cls=b?(b.status==='pending'?'pen':'conf'):'av';
+    const st=b?(b.status==='blocked'?'BLOCKED':b.status.toUpperCase()+' · '+b.name):'AVAILABLE · '+fmt(slotPrice(ds,s.t));
+    const div=document.createElement('div');div.className='cell '+cls;
+    div.innerHTML=`<div>${s.label}</div><div class="st">${st}</div>`;
+    div.onclick=async ()=>{
+      if(!b){ if(confirm('Block '+s.label+' on '+ds+'? (maintenance/hold)')){ await db.collection('bookings').doc(ds+'_'+s.t.replace(':','')).set({date:ds,slot:s.t,client:'BLOCKED',name:'BLOCKED',phone:'',price:0,status:'blocked',source:'admin',created:firebase.firestore.FieldValue.serverTimestamp()}); renderCal(); } }
+      else if(b.status==='pending'){ if(confirm('Confirm this pending booking by '+b.client+'?')) {await confirmBk(b.id); renderCal();} }
+      else { if(confirm('Remove '+(b.status==='blocked'?'block':'booking by '+b.client)+'?')){ await db.collection('bookings').doc(b.id).delete(); renderCal(); } }
+    };
+    el.appendChild(div);
+  });
+}
+
+// ---- Manual booking ----
+async function manualBook(){
+  const ds=$('mDate').value, slot=$('mSlot').value;
+  const name=$('mName').value.trim(), phone=$('mPhone').value.trim();
+  if(!name){toast('Enter client name');return;}
+  const id=ds+'_'+slot.replace(':','');
+  const price=(+$('mPrice').value||0)-(+$('mDisc').value||0);
+  const data={date:ds,slot,client:name+(phone?' '+phone:''),name,phone,price,discount:+$('mDisc').value||0,
+    paid:+$('mPaid').value||0,method:$('mMethod').value,status:$('mStatus').value,source:'phone',
+    payStatus:(+$('mPaid').value||0)>=price?'Paid':((+$('mPaid').value||0)>0?'Partially paid':'Due'),
+    created:firebase.firestore.FieldValue.serverTimestamp(),by:ME.email};
+  try{
+    await db.collection('bookings').doc(id).set(data,{merge:false});
+    if(phone)db.collection('clients').doc(phone).set({name,phone,last:ds},{merge:true});
+    if(data.status==='confirmed')syncSheet(data);
+    toast('Booking saved ✅'); $('mName').value='';$('mPhone').value='';$('mPaid').value=0;$('mDisc').value=0;
+  }catch(e){toast('⚠ Slot already taken for that date/time');}
+}
+
+// ---- Finance ----
+async function loadHeads(){
+  const snap=await db.collection('heads').get();
+  let heads=[];snap.forEach(d=>heads.push({id:d.id,...d.data()}));
+  if(!heads.length){ // seed defaults
+    const batch=db.batch();
+    DEFAULT_HEADS.expense.forEach(h=>batch.set(db.collection('heads').doc(),{name:h,type:'Expense'}));
+    DEFAULT_HEADS.income.forEach(h=>batch.set(db.collection('heads').doc(),{name:h,type:'Income'}));
+    await batch.commit(); return loadHeads();
+  }
+  window.HEADS=heads;
+  fillHeadSel();
+  $('hList').innerHTML=heads.map(h=>`${h.type==='Income'?'🟢':'🔴'} ${h.name}`).join('<br>');
+}
+function fillHeadSel(){
+  const ty=$('tType').value;
+  $('tHead').innerHTML=(window.HEADS||[]).filter(h=>h.type===ty).map(h=>`<option>${h.name}</option>`).join('');
+}
+document.addEventListener('change',e=>{if(e.target.id==='tType')fillHeadSel();});
+async function addHead(){
+  const n=$('hName').value.trim(); if(!n)return;
+  await db.collection('heads').add({name:n,type:$('hType').value});
+  $('hName').value=''; toast('Head added'); loadHeads();
+}
+async function saveTxn(){
+  const amt=+$('tAmt').value; if(!amt){toast('Enter amount');return;}
+  const data={date:$('tDate').value,type:$('tType').value,cat:$('tHead').value,details:$('tDet').value,
+    amount:amt,method:$('tMethod').value,by:ME.email,created:firebase.firestore.FieldValue.serverTimestamp()};
+  await db.collection('transactions').add(data);
+  syncSheetTxn(data);
+  $('tAmt').value='';$('tDet').value=''; toast('Entry saved ✅'); loadTxns();
+}
+async function loadTxns(){
+  const m=todayStr().slice(0,7);
+  const snap=await db.collection('transactions').orderBy('created','desc').limit(40).get();
+  let rows='<tr><th>Date</th><th>Type</th><th>Head</th><th>Details</th><th class="r">Amount</th></tr>',inc=0,exp=0;
+  snap.forEach(d=>{const t=d.data();
+    rows+=`<tr><td>${t.date}</td><td>${t.type==='Income'?'🟢':'🔴'}</td><td>${t.cat}</td><td>${t.details||''}</td><td class="r">${fmt(t.amount)}</td></tr>`;});
+  $('tTable').innerHTML=rows;
+  const ms=await db.collection('transactions').where('date','>=',m+'-01').where('date','<=',m+'-31').get();
+  ms.forEach(d=>{const t=d.data(); if(t.type==='Income')inc+=t.amount;else exp+=t.amount;});
+  const bs=await db.collection('bookings').where('date','>=',m+'-01').where('date','<=',m+'-31').get();
+  bs.forEach(d=>{const b=d.data(); if(b.status==='confirmed')inc+=(+b.paid||0);});
+  $('fRev').textContent=fmt(inc);$('fExp').textContent=fmt(exp);$('fNet').textContent=fmt(inc-exp);
+}
+
+// ---- Admins ----
+async function loadAdmins(){
+  const snap=await db.collection('admins').get().catch(()=>null);
+  if(!snap)return;
+  let h='';snap.forEach(d=>h+=`${d.data().role==='owner'?'👑':'👤'} ${d.data().email||d.id} (${d.data().role})<br>`);
+  $('aList').innerHTML=h;
+}
+async function addAdmin(){
+  if(MYROLE!=='owner'){toast('Only owners can add admins');return;}
+  const uid=$('aUid').value.trim(); if(!uid)return;
+  await db.collection('admins').doc(uid).set({role:$('aRole').value,addedBy:ME.email});
+  $('aUid').value=''; toast('Admin added'); loadAdmins();
+}
+
+// ---- Google Sheet sync (optional webhook) ----
+function syncSheet(b){ if(!SHEET_WEBHOOK)return;
+  fetch(SHEET_WEBHOOK,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify({kind:'booking',...b,created:undefined,confirmedAt:undefined})}).catch(()=>{});
+}
+function syncSheetTxn(t){ if(!SHEET_WEBHOOK)return;
+  fetch(SHEET_WEBHOOK,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify({kind:'txn',...t,created:undefined})}).catch(()=>{});
+}
+</script>
+</body>
+</html>

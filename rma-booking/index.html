@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Royal Multisport Arena — Book Your Slot</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="config.js"></script>
+<style>
+:root{--bg:#0b1220;--card:#111b2e;--border:#1e2a44;--txt:#e6edf7;--mut:#8b9bb8;--grn:#22c55e;--amb:#f59e0b;--red:#ef4444}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,'Segoe UI',sans-serif;padding-bottom:40px}
+header{background:linear-gradient(135deg,#123524,#0b1220);padding:18px 16px;border-bottom:1px solid var(--border)}
+h1{font-size:19px} h1 span{color:var(--grn)}
+.sub{color:var(--mut);font-size:12px;margin-top:4px}
+main{max-width:520px;margin:0 auto;padding:14px}
+.dates{display:flex;gap:8px;overflow-x:auto;padding:4px 0 10px;-webkit-overflow-scrolling:touch}
+.dch{flex:0 0 auto;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:8px 12px;text-align:center;cursor:pointer;min-width:62px}
+.dch.on{background:var(--grn);color:#04140a;border-color:var(--grn)}
+.dch .d1{font-size:11px;opacity:.8}.dch .d2{font-size:16px;font-weight:700}
+.dch.fri .d1{color:var(--amb)}.dch.on .d1{color:inherit}
+.slots{display:grid;gap:8px;margin-top:6px}
+.slot{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center}
+.slot .t{font-size:14px;font-weight:600}.slot .p{font-size:12px;color:var(--mut);margin-top:2px}
+.badge{font-size:11px;font-weight:700;padding:5px 12px;border-radius:14px}
+.b-av{background:#123524;color:var(--grn);cursor:pointer;border:1px solid #1f5c3b}
+.b-pen{background:#3a2a08;color:var(--amb)}
+.b-bk{background:#2a1215;color:#f87171}
+.b-bl{background:#222;color:#777}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:flex-end;z-index:10}
+.sheet.on{display:flex}
+.form{background:var(--card);border-radius:18px 18px 0 0;padding:20px 18px 30px;width:100%;max-width:520px;margin:0 auto}
+.form h3{font-size:16px;margin-bottom:4px}
+.form .fp{color:var(--mut);font-size:12.5px;margin-bottom:14px}
+label{font-size:12px;color:var(--mut);display:block;margin:10px 0 4px}
+input,select{width:100%;background:#0e1626;border:1px solid var(--border);color:var(--txt);border-radius:10px;padding:12px;font-size:15px}
+.btn{width:100%;background:var(--grn);color:#04140a;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:700;margin-top:16px;cursor:pointer}
+.btn.sec{background:transparent;color:var(--mut);border:1px solid var(--border);margin-top:8px}
+.note{background:#0e1626;border:1px dashed var(--border);border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--mut);margin-top:12px;line-height:1.5}
+.note b{color:var(--amb)}
+.mybk{margin-top:22px}
+.mybk h3{font-size:14px;margin-bottom:8px}
+.bkitem{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#123524;color:var(--grn);border:1px solid #1f5c3b;padding:10px 18px;border-radius:12px;font-size:13.5px;z-index:20;display:none;max-width:92%}
+footer{text-align:center;color:var(--mut);font-size:11.5px;margin-top:30px;line-height:1.6}
+.err{color:var(--red);font-size:12.5px;margin-top:8px;display:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>⚽ Royal <span>Multisport Arena</span></h1>
+  <div class="sub">Book your slot · Premium turf · Shamlapur Western City, Bhakurta, Dhaka · ☎ <a style="color:#22c55e" href="tel:+8801886542122">01886-542122</a></div>
+</header>
+<main>
+  <div class="dates" id="dates"></div>
+  <div class="slots" id="slots"><div style="color:var(--mut);font-size:13px;padding:20px;text-align:center">Loading slots…</div></div>
+
+  <div class="mybk" id="mybk" style="display:none"><h3>📋 My Bookings</h3><div id="mybkList"></div></div>
+
+  <footer>Pending bookings are confirmed by our team after advance verification.<br>Need help? Call <a style="color:#22c55e" href="tel:+8801886542122">01886-542122</a></footer>
+</main>
+
+<div class="sheet" id="sheet">
+  <div class="form">
+    <h3 id="fTitle">Book slot</h3>
+    <div class="fp" id="fSub"></div>
+    <label>Your name</label>
+    <input id="fName" placeholder="e.g. Rakib">
+    <label>Phone number (this is your client ID)</label>
+    <input id="fPhone" placeholder="01XXXXXXXXX" inputmode="numeric" maxlength="11">
+    <div class="note">To confirm instantly, send the <b id="advAmt"></b> advance to bKash <b id="bkNum"></b> (Send Money) and enter the TrxID below. Or skip it — we'll call you to confirm.</div>
+    <label>bKash TrxID (optional)</label>
+    <input id="fTrx" placeholder="e.g. 9K7A2B34XY">
+    <div class="err" id="fErr"></div>
+    <button class="btn" id="fGo">Request Booking</button>
+    <button class="btn sec" onclick="closeSheet()">Cancel</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.firestore();
+firebase.auth().signInAnonymously().catch(e=>console.error(e));
+
+let selDate = null, selSlot = null, unsub = null;
+const $ = id => document.getElementById(id);
+const fmt = n => '৳'+n.toLocaleString('en-IN');
+const todayStr = () => { const d=new Date(); return d.toISOString().slice(0,10); };
+
+function buildDates(){
+  const el=$('dates'); el.innerHTML='';
+  const now=new Date();
+  for(let i=0;i<VENUE.bookAheadDays;i++){
+    const d=new Date(now); d.setDate(d.getDate()+i);
+    const ds=d.toISOString().slice(0,10);
+    const div=document.createElement('div');
+    div.className='dch'+(d.getDay()===5||d.getDay()===6?' fri':'')+(i===0?' on':'');
+    div.innerHTML=`<div class="d1">${d.toLocaleDateString('en-GB',{weekday:'short'})}</div><div class="d2">${d.getDate()}</div><div class="d1">${d.toLocaleDateString('en-GB',{month:'short'})}</div>`;
+    div.onclick=()=>{document.querySelectorAll('.dch').forEach(x=>x.classList.remove('on'));div.classList.add('on');loadDay(ds);};
+    el.appendChild(div);
+    if(i===0) selDate=ds;
+  }
+}
+
+function loadDay(ds){
+  selDate=ds;
+  if(unsub)unsub();
+  unsub=db.collection('bookings').where('date','==',ds).onSnapshot(snap=>{
+    const taken={};
+    snap.forEach(doc=>{const b=doc.data(); taken[b.slot]=b.status;});
+    renderSlots(ds,taken);
+  },e=>{$('slots').innerHTML='<div style="color:var(--red);font-size:13px;padding:20px;text-align:center">Could not load slots. Check your connection.</div>';});
+}
+
+function renderSlots(ds,taken){
+  const el=$('slots'); el.innerHTML='';
+  const isToday = ds===todayStr();
+  const nowMin = new Date().getHours()*60+new Date().getMinutes();
+  SLOTS.forEach(s=>{
+    const st=taken[s.t];
+    const [h,m]=s.t.split(':').map(Number);
+    const past = isToday && (h*60+m) < nowMin;
+    const price=slotPrice(ds,s.t);
+    let badge;
+    if(past) badge='<span class="badge b-bl">Past</span>';
+    else if(st==='confirmed'||st==='blocked') badge='<span class="badge b-bk">Booked</span>';
+    else if(st==='pending') badge='<span class="badge b-pen">Pending</span>';
+    else badge=`<span class="badge b-av" onclick="openSheet('${s.t}')">Book ${fmt(price)}</span>`;
+    const div=document.createElement('div'); div.className='slot';
+    div.innerHTML=`<div><div class="t">${s.label}${s.bonus?' <span style="color:var(--amb);font-size:10px">★ EARLY BIRD</span>':''}</div><div class="p">${fmt(price)} · full field 90 min</div></div>${badge}`;
+    el.appendChild(div);
+  });
+}
+
+function openSheet(slotT){
+  selSlot=slotT;
+  const s=SLOTS.find(x=>x.t===slotT);
+  $('fTitle').textContent='Book '+s.label;
+  $('fSub').textContent=new Date(selDate+'T00:00:00').toDateString()+' · '+fmt(slotPrice(selDate,slotT));
+  $('advAmt').textContent=fmt(VENUE.advance);
+  $('bkNum').textContent=VENUE.bkash;
+  $('fName').value=localStorage.getItem('rma_name')||'';
+  $('fPhone').value=localStorage.getItem('rma_phone')||'';
+  $('fTrx').value=''; $('fErr').style.display='none';
+  $('sheet').classList.add('on');
+}
+function closeSheet(){$('sheet').classList.remove('on');}
+
+$('fGo').onclick=async ()=>{
+  const name=$('fName').value.trim(), phone=$('fPhone').value.trim(), trx=$('fTrx').value.trim();
+  const err=$('fErr');
+  if(!name){err.textContent='Please enter your name.';err.style.display='block';return;}
+  if(!/^01\d{9}$/.test(phone)){err.textContent='Enter a valid 11-digit phone number (01XXXXXXXXX).';err.style.display='block';return;}
+  $('fGo').disabled=true; $('fGo').textContent='Booking…';
+  const id=selDate+'_'+selSlot.replace(':','');
+  const client=name+' '+phone;
+  try{
+    await db.collection('bookings').doc(id).set({
+      date:selDate, slot:selSlot, client, name, phone,
+      price:slotPrice(selDate,selSlot), advance: trx?VENUE.advance:0, trxId:trx||null,
+      status:'pending', source:'web',
+      created:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    localStorage.setItem('rma_name',name); localStorage.setItem('rma_phone',phone);
+    db.collection('clients').doc(phone).set({name,phone,last:selDate},{merge:true}).catch(()=>{});
+    closeSheet(); toast(trx?'Request sent! We will verify your advance and confirm shortly. ✅':'Request sent! We will call you to confirm. 📞');
+    loadMyBookings();
+  }catch(e){
+    err.textContent = e.code==='permission-denied' ? 'Sorry — this slot was just taken. Pick another.' : 'Could not book: '+e.message;
+    err.style.display='block';
+    loadDay(selDate);
+  }
+  $('fGo').disabled=false; $('fGo').textContent='Request Booking';
+};
+
+function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',5000);}
+
+async function loadMyBookings(){
+  const phone=localStorage.getItem('rma_phone'); if(!phone)return;
+  const snap=await db.collection('bookings').where('phone','==',phone).where('date','>=',todayStr()).get().catch(()=>null);
+  if(!snap||snap.empty)return;
+  $('mybk').style.display='block';
+  const list=$('mybkList'); list.innerHTML='';
+  const items=[]; snap.forEach(d=>items.push(d.data()));
+  items.sort((a,b)=>a.date.localeCompare(b.date));
+  items.forEach(b=>{
+    const s=SLOTS.find(x=>x.t===b.slot);
+    const cls=b.status==='confirmed'?'b-av':b.status==='pending'?'b-pen':'b-bk';
+    list.innerHTML+=`<div class="bkitem"><span>${b.date} · ${s?s.label:b.slot}</span><span class="badge ${cls}">${b.status}</span></div>`;
+  });
+}
+
+buildDates(); loadDay(selDate); loadMyBookings();
+</script>
+</body>
+</html>
