@@ -64,6 +64,7 @@ td{padding:7px 6px;border-bottom:1px solid #16223a}
 <main>
   <div class="tabs">
     <div class="tab on" data-p="pReq">Requests <span id="reqN"></span></div>
+    <div class="tab" data-p="pAll">All Bookings</div>
     <div class="tab" data-p="pCal">Calendar</div>
     <div class="tab" data-p="pMan">Manual Book</div>
     <div class="tab" data-p="pFin">Finance</div>
@@ -72,6 +73,19 @@ td{padding:7px 6px;border-bottom:1px solid #16223a}
 
   <div class="pane on" id="pReq"><div id="reqList" class="card"><h3>⏳ Pending Requests</h3><div id="reqItems">Loading…</div></div>
     <div class="card"><h3>✅ Upcoming Confirmed</h3><div id="confItems">Loading…</div></div></div>
+
+  <div class="pane" id="pAll">
+    <div class="card"><h3>📋 All Bookings</h3>
+      <div class="row"><div><label>From</label><input type="date" id="abFrom"></div><div><label>To</label><input type="date" id="abTo"></div></div>
+      <div class="row" style="margin-top:6px">
+        <div><label>Status</label><select id="abStatus"><option value="">All</option><option value="confirmed">Confirmed</option><option value="pending">Pending</option><option value="blocked">Blocked</option></select></div>
+        <div><label>Search (name/phone)</label><input id="abSearch" placeholder="e.g. Rakib or 018..."></div>
+      </div>
+      <button class="btn ghost" style="margin-top:10px" onclick="loadAllBookings()">🔍 Apply Filters</button>
+      <div class="mini" id="abCount" style="margin-top:8px"></div>
+    </div>
+    <div id="abList"></div>
+  </div>
 
   <div class="pane" id="pCal">
     <div class="card"><label>Date</label><input type="date" id="calDate">
@@ -172,7 +186,9 @@ function init(){
   $('mDate').onchange=$('mSlot').onchange=()=>{$('mPrice').value=slotPrice($('mDate').value,$('mSlot').value);};
   $('mPrice').value=slotPrice($('mDate').value,$('mSlot').value);
   $('calDate').onchange=()=>renderCal();
-  watchRequests(); renderCal(); loadHeads(); loadTxns(); loadAdmins(); loadSlotCfg();
+    const abF=new Date(),abT=new Date(); abF.setDate(abF.getDate()-30); abT.setDate(abT.getDate()+60);
+  $('abFrom').value=localDateStr(abF); $('abTo').value=localDateStr(abT);
+  watchRequests(); renderCal(); loadHeads(); loadTxns(); loadAdmins(); loadSlotCfg(); loadAllBookings();
 }
 
 // ---- Slot categories, pricing & availability ----
@@ -272,19 +288,95 @@ async function confirmBk(id){
   const method=prompt('Payment method ('+PAY_METHODS.join('/')+'):','Bkash');
   await ref.update({status:'confirmed',paid:+paid||0,method:method||'Bkash',confirmedBy:ME.email,confirmedAt:firebase.firestore.FieldValue.serverTimestamp()});
   syncSheet({...b,status:'confirmed',paid:+paid||0,method});
-  toast('Confirmed ✅');
+  toast('Confirmed ✅'); loadAllBookings();
 }
 async function rejectBk(id){
   if(!confirm('Remove this booking? The slot becomes available again.'))return;
   await db.collection('bookings').doc(id).delete(); toast('Removed');
-  renderCal();
-}
+    renderCal(); loadAllBookings();
+
 async function payBk(id,price,paid){
   const amt=prompt('Total paid amount (price '+price+', already recorded '+paid+'):',price);
   if(amt===null)return;
   const method=prompt('Method ('+PAY_METHODS.join('/')+'):','Cash');
   await db.collection('bookings').doc(id).update({paid:+amt||0,method:method||'Cash',payStatus:+amt>=price?'Paid':'Partially paid'});
-  toast('Payment updated');
+  toast('Payment updated'); loadAllBookings();
+}
+
+// ---- All Bookings (list, amend, cancel) ----
+let ABCACHE={};
+function bkRowHtml(id,b){
+  const cls=b.status==='pending'?'b-pen':b.status==='blocked'?'b-bl':'b-conf';
+  return `<div class="bk" id="row_${id}">
+    <div><b>${b.date} ${b.slot}</b> · ${b.client||b.name||'—'}<div class="mini">${fmt(b.price)} · paid ${fmt(b.paid||0)} · ${b.method||'—'} · <span class="badge ${cls}">${b.status}</span></div></div>
+    <div><button class="btn ghost" style="margin:0" onclick="toggleEdit('${id}')">✎ Edit</button>
+    <button class="btn danger" style="margin:0" onclick="cancelBooking('${id}','${(b.date+' '+b.slot).replace(/'/g,"")}')">✕ Cancel</button></div>
+  </div>`;
+}
+function loadAllBookings(){
+  const from=$('abFrom').value||'2000-01-01', to=$('abTo').value||'2100-01-01';
+  db.collection('bookings').where('date','>=',from).where('date','<=',to).orderBy('date','desc').get().then(snap=>{
+    ABCACHE={};
+    let items=[];
+    snap.forEach(d=>{ABCACHE[d.id]=d.data(); items.push({id:d.id,...d.data()});});
+    const statusF=$('abStatus').value, q=$('abSearch').value.trim().toLowerCase();
+    if(statusF) items=items.filter(b=>b.status===statusF);
+    if(q) items=items.filter(b=>(b.name||'').toLowerCase().includes(q)||(b.phone||'').includes(q)||(b.client||'').toLowerCase().includes(q));
+    $('abCount').textContent=items.length+' booking(s)';
+    $('abList').innerHTML=items.map(b=>bkRowHtml(b.id,b)).join('')||'<div class="mini" style="padding:10px">No bookings match.</div>';
+  }).catch(e=>{ $('abList').innerHTML='<div class="mini" style="color:var(--red)">Error: '+e.message+'</div>'; });
+}
+function toggleEdit(id){
+  const b=ABCACHE[id]; if(!b)return;
+  const row=$('row_'+id); if(!row)return;
+  if(row.nextElementSibling && row.nextElementSibling.classList.contains('editform')){ row.nextElementSibling.remove(); return; }
+  document.querySelectorAll('.editform').forEach(f=>f.remove());
+  const form=document.createElement('div');
+  form.className='card editform';
+  form.innerHTML=`
+    <div class="row"><div><label>Date</label><input type="date" id="ed_date_${id}" value="${b.date}"></div>
+    <div><label>Slot</label><select id="ed_slot_${id}"></select></div></div>
+    <div class="row"><div><label>Client name</label><input id="ed_name_${id}" value="${(b.name||'').replace(/"/g,'&quot;')}"></div>
+    <div><label>Phone</label><input id="ed_phone_${id}" value="${b.phone||''}"></div></div>
+    <div class="row"><div><label>Price</label><input type="number" id="ed_price_${id}" value="${b.price||0}"></div>
+    <div><label>Paid</label><input type="number" id="ed_paid_${id}" value="${b.paid||0}"></div></div>
+    <div class="row"><div><label>Method</label><select id="ed_method_${id}"></select></div>
+    <div><label>Status</label><select id="ed_status_${id}"><option value="pending">Pending</option><option value="confirmed">Confirmed</option><option value="blocked">Blocked</option></select></div></div>
+    <button class="btn" onclick="saveEdit('${id}')">💾 Save Changes</button>
+    <button class="btn ghost" onclick="toggleEdit('${id}')">Close</button>`;
+  row.after(form);
+  slotSel($('ed_slot_'+id)); $('ed_slot_'+id).value=b.slot;
+  methodSel($('ed_method_'+id)); $('ed_method_'+id).value=b.method||'Cash';
+  $('ed_status_'+id).value=b.status;
+}
+async function saveEdit(id){
+  const old=ABCACHE[id]; if(!old)return;
+  const newDate=$('ed_date_'+id).value, newSlot=$('ed_slot_'+id).value;
+  const name=$('ed_name_'+id).value.trim(), phone=$('ed_phone_'+id).value.trim();
+  const price=+$('ed_price_'+id).value||0, paid=+$('ed_paid_'+id).value||0;
+  const method=$('ed_method_'+id).value, status=$('ed_status_'+id).value;
+  const newId=newDate+'_'+newSlot.replace(':','');
+  const data={date:newDate,slot:newSlot,name,phone,client:name+(phone?' '+phone:''),price,paid,method,status,
+    payStatus:paid>=price?'Paid':(paid>0?'Partially paid':'Due'),
+    source:old.source||'admin',by:ME.email,editedAt:firebase.firestore.FieldValue.serverTimestamp()};
+  try{
+    if(newId!==id){
+      const clash=await db.collection('bookings').doc(newId).get();
+      if(clash.exists){ toast('⚠ That date/slot is already booked'); return; }
+      const batch=db.batch();
+      batch.delete(db.collection('bookings').doc(id));
+      batch.set(db.collection('bookings').doc(newId),{...data,created:old.created||firebase.firestore.FieldValue.serverTimestamp()});
+      await batch.commit();
+    }else{
+      await db.collection('bookings').doc(id).update(data);
+    }
+    toast('Booking updated ✅'); loadAllBookings(); renderCal();
+  }catch(e){ toast('⚠ '+e.message); }
+}
+async function cancelBooking(id,label){
+  if(!confirm('Cancel booking '+label+'? This cannot be undone.'))return;
+  await db.collection('bookings').doc(id).delete();
+  toast('Booking cancelled'); loadAllBookings(); renderCal();
 }
 
 // ---- Calendar ----
@@ -323,7 +415,7 @@ async function manualBook(){
     await db.collection('bookings').doc(id).set(data,{merge:false});
     if(phone)db.collection('clients').doc(phone).set({name,phone,last:ds},{merge:true});
     if(data.status==='confirmed')syncSheet(data);
-    toast('Booking saved ✅'); $('mName').value='';$('mPhone').value='';$('mPaid').value=0;$('mDisc').value=0;
+      toast('Booking saved ✅'); $('mName').value=''; $('mPhone').value=''; $('mPaid').value=0; $('mDisc').value=0; loadAllBookings();
   }catch(e){toast('⚠ Slot already taken for that date/time');}
 }
 
