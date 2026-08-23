@@ -275,8 +275,10 @@ function watchRequests(){
     const items=[];snap.forEach(d=>items.push({id:d.id,...d.data()}));
     items.sort((a,b)=>(a.date+a.slot).localeCompare(b.date+b.slot));
     items.slice(0,30).forEach(b=>{
+      const fullyPaid=(+b.paid||0)>=(+b.price||0);
+      const payBtn=fullyPaid?`<span class="badge b-conf" style="margin-right:6px">Paid</span>`:`<button class="btn warn" style="margin:0" onclick="payBk('${b.id}',${b.price},${b.paid||0})">💰 Pay</button>`;
       el.innerHTML+=`<div class="bk"><div><b>${b.date} ${b.slot}</b> · ${b.client}<div class="mini">${fmt(b.price)} · paid ${fmt(b.paid||0)} (${b.method||'—'})</div></div>
-      <div><button class="btn warn" style="margin:0" onclick="payBk('${b.id}',${b.price},${b.paid||0})">💰 Pay</button>
+      <div>${payBtn}
       <button class="btn danger" style="margin:0" onclick="rejectBk('${b.id}')">✕</button></div></div>`;
     });
   });
@@ -298,10 +300,14 @@ async function rejectBk(id){
 }
 
 async function payBk(id,price,paid){
-  const amt=prompt('Total paid amount (price '+price+', already recorded '+paid+'):',price);
+  const disc=prompt('Discount to apply (BDT), leave 0 if none:','0');
+  if(disc===null)return;
+  const discount=+disc||0;
+  const newPrice=Math.max(0,price-discount);
+  const amt=prompt('Total paid amount (price after discount '+newPrice+', already recorded '+paid+'):',newPrice);
   if(amt===null)return;
   const method=prompt('Method ('+PAY_METHODS.join('/')+'):','Cash');
-  await db.collection('bookings').doc(id).update({paid:+amt||0,method:method||'Cash',payStatus:+amt>=price?'Paid':'Partially paid'});
+  await db.collection('bookings').doc(id).update({price:newPrice,discount:discount,paid:+amt||0,method:method||'Cash',payStatus:+amt>=newPrice?'Paid':'Partially paid'});
   toast('Payment updated'); loadAllBookings();
 }
 
@@ -453,18 +459,34 @@ async function saveTxn(){
   syncSheetTxn(data);
   $('tAmt').value='';$('tDet').value=''; toast('Entry saved ✅'); loadTxns();
 }
+let TXCACHE={};
 async function loadTxns(){
   const m=todayStr().slice(0,7);
   const snap=await db.collection('transactions').orderBy('created','desc').limit(40).get();
-  let rows='<tr><th>Date</th><th>Type</th><th>Head</th><th>Details</th><th class="r">Amount</th></tr>',inc=0,exp=0;
-  snap.forEach(d=>{const t=d.data();
-    rows+=`<tr><td>${t.date}</td><td>${t.type==='Income'?'🟢':'🔴'}</td><td>${t.cat}</td><td>${t.details||''}</td><td class="r">${fmt(t.amount)}</td></tr>`;});
+  TXCACHE={};
+  let rows='<tr><th>Date</th><th>Type</th><th>Head</th><th>Details</th><th class="r">Amount</th><th></th></tr>',inc=0,exp=0;
+  snap.forEach(d=>{const t=d.data(); TXCACHE[d.id]=t;
+    rows+=`<tr><td>${t.date}</td><td>${t.type==='Income'?'🟢':'🔴'}</td><td>${t.cat}</td><td>${t.details||''}</td><td class="r">${fmt(t.amount)}</td><td><button class="btn ghost" style="margin:0;padding:4px 8px;font-size:11px" onclick="editTxn('${d.id}')">✎</button> <button class="btn danger" style="margin:0;padding:4px 8px;font-size:11px" onclick="deleteTxn('${d.id}')">✕</button></td></tr>`;});
   $('tTable').innerHTML=rows;
   const ms=await db.collection('transactions').where('date','>=',m+'-01').where('date','<=',m+'-31').get();
   ms.forEach(d=>{const t=d.data(); if(t.type==='Income')inc+=t.amount;else exp+=t.amount;});
   const bs=await db.collection('bookings').where('date','>=',m+'-01').where('date','<=',m+'-31').get();
   bs.forEach(d=>{const b=d.data(); if(b.status==='confirmed')inc+=(+b.paid||0);});
   $('fRev').textContent=fmt(inc);$('fExp').textContent=fmt(exp);$('fNet').textContent=fmt(inc-exp);
+}
+async function editTxn(id){
+  const t=TXCACHE[id]; if(!t)return;
+  const details=prompt('Details:',t.details||'');
+  if(details===null)return;
+  const amt=prompt('Amount (BDT):',t.amount);
+  if(amt===null)return;
+  await db.collection('transactions').doc(id).update({details,amount:+amt||0});
+  toast('Entry updated'); loadTxns();
+}
+async function deleteTxn(id){
+  if(!confirm('Delete this transaction? This cannot be undone.'))return;
+  await db.collection('transactions').doc(id).delete();
+  toast('Entry deleted'); loadTxns();
 }
 
 // ---- Admins ----
