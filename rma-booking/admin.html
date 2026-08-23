@@ -413,6 +413,7 @@ async function manualBook(){
   const ds=$('mDate').value, slot=$('mSlot').value;
   const name=$('mName').value.trim(), phone=$('mPhone').value.trim();
   if(!name){toast('Enter client name');return;}
+  if(!/^01\d{9}$/.test(phone)){toast('Enter a valid 11-digit phone number (01XXXXXXXXX)');return;}
   const id=ds+'_'+slot.replace(':','');
   const price=(+$('mPrice').value||0)-(+$('mDisc').value||0);
   const data={date:ds,slot,client:name+(phone?' '+phone:''),name,phone,price,discount:+$('mDisc').value||0,
