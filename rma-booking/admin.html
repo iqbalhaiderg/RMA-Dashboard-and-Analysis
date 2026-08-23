@@ -296,7 +296,7 @@ async function confirmBk(id){
 async function rejectBk(id){
   if(!confirm('Remove this booking? The slot becomes available again.'))return;
   await db.collection('bookings').doc(id).delete(); toast('Removed');
-    renderCal(); loadAllBookings();
+    renderCal(); loadAllBookings(); loadTxns();
 }
 
 async function payBk(id,price,paid){
@@ -384,7 +384,7 @@ async function saveEdit(id){
 async function cancelBooking(id,label){
   if(!confirm('Cancel booking '+label+'? This cannot be undone.'))return;
   await db.collection('bookings').doc(id).delete();
-  toast('Booking cancelled'); loadAllBookings(); renderCal();
+  toast('Booking cancelled'); loadAllBookings(); renderCal(); loadTxns();
 }
 
 // ---- Calendar ----
@@ -402,7 +402,7 @@ async function renderCal(){
     div.onclick=async ()=>{
       if(!b){ if(confirm('Block '+s.label+' on '+ds+'? (maintenance/hold)')){ await db.collection('bookings').doc(ds+'_'+s.t.replace(':','')).set({date:ds,slot:s.t,client:'BLOCKED',name:'BLOCKED',phone:'',price:0,status:'blocked',source:'admin',created:firebase.firestore.FieldValue.serverTimestamp()}); renderCal(); } }
       else if(b.status==='pending'){ if(confirm('Confirm this pending booking by '+b.client+'?')) {await confirmBk(b.id); renderCal();} }
-      else { if(confirm('Remove '+(b.status==='blocked'?'block':'booking by '+b.client)+'?')){ await db.collection('bookings').doc(b.id).delete(); renderCal(); } }
+      else { if(confirm('Remove '+(b.status==='blocked'?'block':'booking by '+b.client)+'?')){ await db.collection('bookings').doc(b.id).delete(); renderCal(); loadTxns(); } }
     };
     el.appendChild(div);
   });
