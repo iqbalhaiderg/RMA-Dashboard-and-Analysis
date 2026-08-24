@@ -71,8 +71,12 @@ td{padding:7px 6px;border-bottom:1px solid #16223a}
     <div class="tab" data-p="pSet">Settings</div>
   </div>
 
-  <div class="pane on" id="pReq"><div id="reqList" class="card"><h3>⏳ Pending Requests</h3><div id="reqItems">Loading…</div></div>
-    <div class="card"><h3>✅ Upcoming Confirmed</h3><div id="confItems">Loading…</div></div></div>
+  <div class="pane on" id="pReq"><div id="reqList" class="card"><h3>⏳ Pending Requests</h3>
+    <div class="row"><div><label>Client</label><input id="reqFClient" placeholder="Name or phone" oninput="renderReqItems()"></div><div><label>Date</label><input type="date" id="reqFDate" onchange="renderReqItems()"></div></div>
+    <div id="reqItems">Loading…</div></div>
+    <div class="card"><h3>✅ Upcoming Confirmed</h3>
+    <div class="row"><div><label>Client</label><input id="confFClient" placeholder="Name or phone" oninput="renderConfItems()"></div><div><label>Date</label><input type="date" id="confFDate" onchange="renderConfItems()"></div></div>
+    <div id="confItems">Loading…</div></div></div>
 
   <div class="pane" id="pAll">
     <div class="card"><h3>📋 All Bookings</h3>
@@ -258,29 +262,51 @@ function updateSlotActive(t,val){ SLOTCFG.active[t]=val; saveSlotCfg(); }
 async function saveSlotCfg(){ await db.collection('settings').doc('slots').set(SLOTCFG); }
 
 // ---- Requests ----
-function watchRequests(){
-  db.collection('bookings').where('status','==','pending').onSnapshot(snap=>{
-    const el=$('reqItems'); el.innerHTML=snap.empty?'<div class="mini">No pending requests 🎉</div>':'';
-    $('reqN').textContent=snap.empty?'':'('+snap.size+')';
-    const items=[];snap.forEach(d=>items.push({id:d.id,...d.data()}));
-    items.sort((a,b)=>(a.date+a.slot).localeCompare(b.date+b.slot));
-    items.forEach(b=>{
-      el.innerHTML+=`<div class="bk"><div><b>${b.date} ${b.slot}</b> · ${b.client}<div class="mini">${fmt(b.price)} · adv ${fmt(b.advance||0)} ${b.trxId?'· TrxID <b style="color:var(--amb)">'+b.trxId+'</b>':''} · ${b.source||'web'}</div></div>
+let REQ_ITEMS=[], CONF_ITEMS=[];
+function matchesReqFilter(b, clientVal, dateVal){
+  if(dateVal && b.date!==dateVal) return false;
+  if(clientVal){
+    const q=clientVal.trim().toLowerCase();
+    const hay=((b.client||'')+' '+(b.phone||'')).toLowerCase();
+    if(!hay.includes(q)) return false;
+  }
+  return true;
+}
+function renderReqItems(){
+  const el=$('reqItems');
+  const clientVal=$('reqFClient')?$('reqFClient').value:'', dateVal=$('reqFDate')?$('reqFDate').value:'';
+  const items=REQ_ITEMS.filter(b=>matchesReqFilter(b,clientVal,dateVal));
+  el.innerHTML=items.length?'':'<div class="mini">No pending requests 🎉</div>';
+  items.forEach(b=>{
+    el.innerHTML+=`<div class="bk"><div><b>${b.date} ${b.slot}</b> · ${b.client}<div class="mini">${fmt(b.price)} · adv ${fmt(b.advance||0)} ${b.trxId?'· TrxID <b style="color:var(--amb)">'+b.trxId+'</b>':''} · ${b.source||'web'}</div></div>
       <div><button class="btn" style="margin:0" onclick="confirmBk('${b.id}')">Confirm</button>
       <button class="btn danger" style="margin:0" onclick="rejectBk('${b.id}')">Reject</button></div></div>`;
-    });
   });
-  db.collection('bookings').where('status','==','confirmed').where('date','>=',todayStr()).onSnapshot(snap=>{
-    const el=$('confItems'); el.innerHTML=snap.empty?'<div class="mini">Nothing upcoming.</div>':'';
-    const items=[];snap.forEach(d=>items.push({id:d.id,...d.data()}));
-    items.sort((a,b)=>(a.date+a.slot).localeCompare(b.date+b.slot));
-    items.slice(0,30).forEach(b=>{
-      const fullyPaid=(+b.paid||0)>=(+b.price||0);
-      const payBtn=fullyPaid?`<span class="badge b-conf" style="margin-right:6px">Paid</span>`:`<button class="btn warn" style="margin:0" onclick="payBk('${b.id}',${b.price},${b.paid||0})">💰 Pay</button>`;
-      el.innerHTML+=`<div class="bk"><div><b>${b.date} ${b.slot}</b> · ${b.client}<div class="mini">${fmt(b.price)} · paid ${fmt(b.paid||0)} (${b.method||'—'})</div></div>
+}
+function renderConfItems(){
+  const el=$('confItems');
+  const clientVal=$('confFClient')?$('confFClient').value:'', dateVal=$('confFDate')?$('confFDate').value:'';
+  const items=CONF_ITEMS.filter(b=>matchesReqFilter(b,clientVal,dateVal)).slice(0,50);
+  el.innerHTML=items.length?'':'<div class="mini">Nothing upcoming.</div>';
+  items.forEach(b=>{
+    const fullyPaid=(+b.paid||0)>=(+b.price||0);
+    const payBtn=fullyPaid?`<span class="badge b-conf" style="margin-right:6px">Paid</span>`:`<button class="btn warn" style="margin:0" onclick="payBk('${b.id}',${b.price},${b.paid||0})">💰 Pay</button>`;
+    el.innerHTML+=`<div class="bk"><div><b>${b.date} ${b.slot}</b> · ${b.client}<div class="mini">${fmt(b.price)} · paid ${fmt(b.paid||0)} (${b.method||'—'})</div></div>
       <div>${payBtn}
       <button class="btn danger" style="margin:0" onclick="rejectBk('${b.id}')">✕</button></div></div>`;
-    });
+  });
+}
+function watchRequests(){
+  db.collection('bookings').where('status','==','pending').onSnapshot(snap=>{
+    $('reqN').textContent=snap.empty?'':'('+snap.size+')';
+    REQ_ITEMS=[];snap.forEach(d=>REQ_ITEMS.push({id:d.id,...d.data()}));
+    REQ_ITEMS.sort((a,b)=>(a.date+a.slot).localeCompare(b.date+b.slot));
+    renderReqItems();
+  });
+  db.collection('bookings').where('status','==','confirmed').where('date','>=',todayStr()).onSnapshot(snap=>{
+    CONF_ITEMS=[];snap.forEach(d=>CONF_ITEMS.push({id:d.id,...d.data()}));
+    CONF_ITEMS.sort((a,b)=>(a.date+a.slot).localeCompare(b.date+b.slot));
+    renderConfItems();
   });
 }
 async function confirmBk(id){
@@ -291,7 +317,7 @@ async function confirmBk(id){
   const method=prompt('Payment method ('+PAY_METHODS.join('/')+'):','Bkash');
   await ref.update({status:'confirmed',paid:+paid||0,method:method||'Bkash',confirmedBy:ME.email,confirmedAt:firebase.firestore.FieldValue.serverTimestamp()});
   syncSheet({...b,status:'confirmed',paid:+paid||0,method});
-  toast('Confirmed ✅'); loadAllBookings();
+  toast('Confirmed ✅'); loadAllBookings(); loadTxns();
 }
 async function rejectBk(id){
   if(!confirm('Remove this booking? The slot becomes available again.'))return;
@@ -307,8 +333,11 @@ async function payBk(id,price,paid){
   const amt=prompt('Total paid amount (price after discount '+newPrice+', already recorded '+paid+'):',newPrice);
   if(amt===null)return;
   const method=prompt('Method ('+PAY_METHODS.join('/')+'):','Cash');
-  await db.collection('bookings').doc(id).update({price:newPrice,discount:discount,paid:+amt||0,method:method||'Cash',payStatus:+amt>=newPrice?'Paid':'Partially paid'});
-  toast('Payment updated'); loadAllBookings();
+  const upd={price:newPrice,discount:discount,paid:+amt||0,method:method||'Cash',payStatus:+amt>=newPrice?'Paid':'Partially paid'};
+  await db.collection('bookings').doc(id).update(upd);
+  const bDoc=(await db.collection('bookings').doc(id).get()).data();
+  if(bDoc && bDoc.status==='confirmed') syncSheet({...bDoc, ...upd});
+  toast('Payment updated'); loadAllBookings(); loadTxns();
 }
 
 // ---- All Bookings (list, amend, cancel) ----
@@ -424,7 +453,7 @@ async function manualBook(){
     await db.collection('bookings').doc(id).set(data,{merge:false});
     if(phone)db.collection('clients').doc(phone).set({name,phone,last:ds},{merge:true});
     if(data.status==='confirmed')syncSheet(data);
-      toast('Booking saved ✅'); $('mName').value=''; $('mPhone').value=''; $('mPaid').value=0; $('mDisc').value=0; loadAllBookings();
+      toast('Booking saved ✅'); $('mName').value=''; $('mPhone').value=''; $('mPaid').value=0; $('mDisc').value=0; loadAllBookings(); loadTxns();
   }catch(e){toast('⚠ Slot already taken for that date/time');}
 }
 
