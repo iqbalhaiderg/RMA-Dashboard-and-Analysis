@@ -524,7 +524,7 @@ function pSlot(v){
   return `${String(h).padStart(2,'0')}:${m[2]}`;
 }
 const num=v=>+String(v||'0').replace(/,/g,'')||0;
-async const LIVE_CUTOFF = '2026-09-01';
+const LIVE_CUTOFF = '2026-09-01';
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyAspULbDxz-0_VAvB-G58LmknIY_SHvwi8",
   authDomain: "rma-booking.firebaseapp.com",
@@ -550,7 +550,7 @@ async function fetchAppLive(){
     buildFilters(); render();
   }catch(e){ console.error('app live fetch failed', e); }
 }
-function loadLive(){
+async function loadLive(){
   const badge=document.getElementById('live');
   try{
     const [sr,tr]=await Promise.all([
