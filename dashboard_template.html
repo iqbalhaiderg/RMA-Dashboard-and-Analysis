@@ -6,6 +6,9 @@
 <title>RMA Turf — Business Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
 :root{--bg:#0b1220;--card:#111b2e;--card2:#0e1626;--border:#1e2a44;--txt:#e6edf7;--mut:#8b9bb8;--grn:#22c55e;--grn2:#16a34a;--red:#ef4444;--amb:#f59e0b;--blu:#3b82f6;--cyan:#06b6d4}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -55,9 +58,26 @@ tr:hover td{background:#14203a}
 .sec{font-size:16px;margin:22px 0 12px;display:flex;align-items:center;gap:8px}
 .sec:before{content:'';width:4px;height:18px;background:var(--grn);border-radius:2px;display:inline-block}
 footer{color:var(--mut);font-size:11.5px;margin-top:26px;text-align:center}
+#login{max-width:380px;margin:90px auto;padding:0 16px}
+#login label{font-size:11.5px;color:var(--mut);display:block;margin:10px 0 4px}
+#login input{width:100%;background:var(--card2);border:1px solid var(--border);color:var(--txt);border-radius:8px;padding:10px;font-size:14px}
+#login button{background:var(--grn);color:#04140a;border:none;border-radius:9px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;margin-top:14px;width:100%}
+#lErr{color:var(--red);font-size:12.5px;margin-top:8px}
 </style>
 </head>
 <body>
+
+<div id="login">
+  <h1 style="margin-bottom:18px">⚽ RMA Turf <span class="pitch">Dashboard</span></h1>
+  <div class="card">
+    <label>Email</label><input id="lEmail" type="email" autocomplete="username">
+    <label>Password</label><input id="lPass" type="password" autocomplete="current-password">
+    <button onclick="doLogin()">Sign In</button>
+    <div id="lErr"></div>
+  </div>
+</div>
+
+<div id="dashApp" style="display:none">
 <header>
   <div>
     <h1>⚽ RMA Turf <span class="pitch">Business Dashboard</span></h1>
@@ -65,6 +85,7 @@ footer{color:var(--mut);font-size:11.5px;margin-top:26px;text-align:center}
   </div>
   <div class="controls" id="filters">
     <label class="upl">⬆ Update from Excel<input type="file" id="file" accept=".xlsx" style="display:none"></label>
+    <button class="btn ghost" style="background:transparent;color:var(--mut);border:1px solid var(--border);padding:7px 14px;border-radius:20px;font-size:13px;cursor:pointer" onclick="firebase.auth().signOut()">Sign out</button>
   </div>
 </header>
 
@@ -90,11 +111,26 @@ footer{color:var(--mut);font-size:11.5px;margin-top:26px;text-align:center}
 <div class="sec">🤖 AI Growth Insights</div>
 <div class="ins" id="insights"></div>
 
-<footer>Generated from RMA Sales &amp; Expenses workbook · All amounts in BDT (৳) · Re-upload your updated Excel any time to refresh every chart and insight.</footer>
+<footer>Generated from RMA Sales &amp; Expenses workbook (through Aug 31, 2026) plus live booking-app data from Sept 1, 2026 onward · All amounts in BDT (৳) · Re-upload an updated Excel any time to refresh the pre-Sept-1 history.</footer>
+</div>
 
 <script>
 const RAW = __DATA__;
-let DATA = RAW;
+const LIVE_CUTOFF = '2026-09-01';
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAspULbDxz-0_VAvB-G58LmknIY_SHvwi8",
+  authDomain: "rma-booking.firebaseapp.com",
+  projectId: "rma-booking",
+  storageBucket: "rma-booking.firebasestorage.app",
+  messagingSenderId: "283860989886",
+  appId: "1:283860989886:web:8b7a865498e64a7d3c6bef"
+};
+const SLOT_EVE = {'06:30':false,'08:00':false,'09:30':false,'11:00':false,'12:30':false,'14:00':false,'15:30':false,'17:00':true,'18:30':true,'20:00':true,'21:30':true,'23:00':true};
+firebase.initializeApp(FIREBASE_CONFIG);
+const fsdb = firebase.firestore();
+let LIVE_SALES = [], LIVE_TXNS = [];
+
+let DATA = null;
 const SLOT_ORDER = ['06:30','08:00','09:30','11:00','12:30','14:00','15:30','17:00','18:30','20:00','21:30','23:00','00:00','00:30'];
 const DOWS = ['Sat','Sun','Mon','Tue','Wed','Thu','Fri'];
 const fmt = n => '৳' + Math.round(n).toLocaleString('en-IN');
@@ -309,11 +345,11 @@ function buildFilters(){
   [...PERIODS, ...years.map(y=>[y,y])].forEach(([v,l])=>{
     const b=document.createElement('button');b.className='pill'+(v===period?' on':'');b.textContent=l;
     b.onclick=()=>{period=v;document.querySelectorAll('.pill').forEach(p=>p.classList.remove('on'));b.classList.add('on');render();};
-    f.insertBefore(b,f.lastElementChild);
+    f.insertBefore(b,f.firstElementChild);
   });
 }
 
-// Excel re-upload
+// Excel re-upload (historical corrections, pre-Sept-1 only — live data merges back in automatically)
 document.getElementById('file').addEventListener('change', e=>{
   const file=e.target.files[0]; if(!file)return;
   const rd=new FileReader();
@@ -327,14 +363,47 @@ document.getElementById('file').addEventListener('change', e=>{
       const te=XLSX.utils.sheet_to_json(wb.Sheets['Transaction Entry'],{header:1}).slice(1);
       const txns=te.filter(r=>r[0]instanceof Date).map(r=>({date:fd(r[0]),type:r[1],cat:String(r[2]||'').trim(),details:r[3],amount:+r[5]||0}));
       if(!sales.length)throw new Error('No rows found in "Sales Entry" sheet');
-      DATA=prep({sales,txns}); period='all'; buildFilters(); render();
-      alert(`Loaded ${sales.length.toLocaleString()} bookings and ${txns.length} transactions from ${file.name}`);
+      DATA=prep({sales:[...sales,...LIVE_SALES], txns:[...txns,...LIVE_TXNS]}); period='all'; buildFilters(); render();
+      alert(`Loaded ${sales.length.toLocaleString()} bookings and ${txns.length} transactions from ${file.name} (merged with live app data from ${LIVE_CUTOFF})`);
     }catch(err){alert('Could not read that file: '+err.message);}
   };
   rd.readAsArrayBuffer(file);
 });
 
-DATA=prep(RAW); buildFilters(); render();
+// ---- Auth gate + live Firestore data (Sept 1 onward) ----
+async function fetchLiveData(){
+  const bSnap = await fsdb.collection('bookings').where('date','>=',LIVE_CUTOFF).where('status','==','confirmed').get();
+  const liveSales=[];
+  bSnap.forEach(d=>{
+    const b=d.data();
+    liveSales.push({id:d.id, date:b.date, client:b.client||b.name||'', slot:b.slot, type: SLOT_EVE[b.slot]?'Peak':'Off', amount:(+b.price||0), paid:(+b.paid||0)});
+  });
+  const tSnap = await fsdb.collection('transactions').where('date','>=',LIVE_CUTOFF).get();
+  const liveTxns=[];
+  tSnap.forEach(d=>{const t=d.data(); liveTxns.push({date:t.date, type:t.type, cat:t.cat, details:t.details||'', amount:(+t.amount||0)});});
+  return {liveSales, liveTxns};
+}
+
+async function boot(){
+  const r = await fetchLiveData().catch(e=>{console.error('live data fetch failed', e); return {liveSales:[],liveTxns:[]};});
+  LIVE_SALES = r.liveSales; LIVE_TXNS = r.liveTxns;
+  DATA = prep({sales:[...RAW.sales, ...LIVE_SALES], txns:[...RAW.txns, ...LIVE_TXNS]});
+  buildFilters(); render();
+}
+
+firebase.auth().onAuthStateChanged(async u=>{
+  if(!u || u.isAnonymous){ document.getElementById('login').style.display='block'; document.getElementById('dashApp').style.display='none'; return; }
+  const adm = await fsdb.collection('admins').doc(u.uid).get().catch(()=>null);
+  if(!adm || !adm.exists){ document.getElementById('lErr').textContent='This account is not an admin.'; firebase.auth().signOut(); return; }
+  document.getElementById('login').style.display='none';
+  document.getElementById('dashApp').style.display='block';
+  boot();
+});
+async function doLogin(){
+  document.getElementById('lErr').textContent='';
+  try{ await firebase.auth().signInWithEmailAndPassword(document.getElementById('lEmail').value.trim(), document.getElementById('lPass').value); }
+  catch(e){ document.getElementById('lErr').textContent = e.message; }
+}
 </script>
 </body>
 </html>
