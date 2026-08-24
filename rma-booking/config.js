@@ -23,6 +23,9 @@ const VENUE = {
 
 // Slot schedule. Weekend in Bangladesh = Friday & Saturday.
 const SLOTS = [
+  { t: "00:30", label: "12:30 AM – 2:00 AM", eve: true },
+  { t: "02:00", label: "2:00 AM – 3:30 AM",  eve: true },
+  { t: "03:30", label: "3:30 AM – 5:00 AM",  eve: true },
   { t: "06:30", label: "6:30 AM – 8:00 AM",  eve: false, bonus: true },
   { t: "08:00", label: "8:00 AM – 9:30 AM",  eve: false },
   { t: "09:30", label: "9:30 AM – 11:00 AM", eve: false },
