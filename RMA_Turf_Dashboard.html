@@ -537,6 +537,7 @@ const SLOT_EVE = {'06:30':false,'08:00':false,'09:30':false,'11:00':false,'12:30
 firebase.initializeApp(FIREBASE_CONFIG);
 const fsdb = firebase.firestore();
 let APP_SALES = [];
+let APP_TXNS = [];
 async function fetchAppLive(){
   try{
     const snap = await fsdb.collection('bookings').where('date','>=',LIVE_CUTOFF).where('status','==','confirmed').get();
@@ -546,7 +547,16 @@ async function fetchAppLive(){
       liveSales.push({id:d.id, date:b.date, client:b.client||b.name||'', slot:b.slot, type: SLOT_EVE[b.slot]?'Peak':'Off', amount:(+b.price||0), paid:(+b.paid||0)});
     });
     APP_SALES = liveSales;
-    DATA = prep({sales:[...DATA.sales.filter(s=>s.date<LIVE_CUTOFF), ...APP_SALES], txns:DATA.txns});
+    let liveTxns=[];
+    try{
+      const tsnap = await fsdb.collection('transactions').where('date','>=',LIVE_CUTOFF).get();
+      tsnap.forEach(d=>{
+        const t=d.data();
+        liveTxns.push({date:t.date, type:t.type, cat:t.cat, details:t.details||'', amount:(+t.amount||0)});
+      });
+    }catch(e2){ console.error('app txns fetch failed', e2); }
+    APP_TXNS = liveTxns;
+    DATA = prep({sales:[...DATA.sales.filter(s=>s.date<LIVE_CUTOFF), ...APP_SALES], txns:[...DATA.txns.filter(t=>t.date<LIVE_CUTOFF), ...APP_TXNS]});
     buildFilters(); render();
   }catch(e){ console.error('app live fetch failed', e); }
 }
