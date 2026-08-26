@@ -12,7 +12,9 @@
 :root{--bg:#0b1220;--card:#111b2e;--border:#1e2a44;--txt:#e6edf7;--mut:#8b9bb8;--grn:#22c55e;--amb:#f59e0b;--red:#ef4444}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,'Segoe UI',sans-serif;padding-bottom:40px}
-header{background:linear-gradient(135deg,#123524,#0b1220);padding:18px 16px;border-bottom:1px solid var(--border)}
+header{position:relative;background:linear-gradient(180deg,rgba(11,18,32,.55),rgba(11,18,32,.93) 75%,var(--bg) 100%),url('https://images.squarespace-cdn.com/content/6a89ec1760403d36a489e15a/fcb359b0-5cac-4aae-87bf-0f649eb0ce34/rma-hero-action.jpg?format=1500w') center 35%/cover no-repeat;padding:24px 16px 18px;border-bottom:1px solid var(--border)}
+.hdrow{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.logo{width:42px;height:42px;border-radius:50%;object-fit:cover;border:2px solid var(--grn);flex:0 0 auto;box-shadow:0 2px 8px rgba(0,0,0,.5)}
 h1{font-size:19px} h1 span{color:var(--grn)}
 .sub{color:var(--mut);font-size:12px;margin-top:4px}
 main{max-width:520px;margin:0 auto;padding:14px}
@@ -50,7 +52,7 @@ footer{text-align:center;color:var(--mut);font-size:11.5px;margin-top:30px;line-
 </head>
 <body>
 <header>
-  <h1>⚽ Royal <span>Multisport Arena</span></h1>
+  <div class="hdrow"><img class="logo" src="https://images.squarespace-cdn.com/content/6a89ec1760403d36a489e15a/f07fd7f4-fb71-4da0-861c-1c2f344bbd3e/rma-logo-circle.jpg?format=100w" alt="Royal Multisport Arena"><h1>Royal <span>Multisport Arena</span></h1></div>
   <div class="sub">Book your slot · Premium turf · Shamlapur Western City, Bhakurta, Dhaka · ☎ <a style="color:#22c55e" href="tel:+8801886542122">01886-542122</a></div>
 </header>
 <main>
