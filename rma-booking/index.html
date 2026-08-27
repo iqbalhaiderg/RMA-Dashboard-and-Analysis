@@ -48,18 +48,30 @@ input,select{width:100%;background:#0e1626;border:1px solid var(--border);color:
 .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#123524;color:var(--grn);border:1px solid #1f5c3b;padding:10px 18px;border-radius:12px;font-size:13.5px;z-index:20;display:none;max-width:92%}
 footer{text-align:center;color:var(--mut);font-size:11.5px;margin-top:30px;line-height:1.6}
 .err{color:var(--red);font-size:12.5px;margin-top:8px;display:none}
+
+.hicon{width:34px;height:34px;border-radius:50%;background:#123524;color:var(--grn);border:1px solid #1f5c3b;display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;flex:0 0 auto;margin-left:auto}
+.ckwrap{text-align:center;padding:6px 0 4px}
+.ck{width:54px;height:54px;border-radius:50%;background:var(--grn);color:#04140a;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px;font-weight:700}
+.ckwrap h3{font-size:18px;margin-bottom:4px}
+.sumrow{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13.5px}
+.sumrow:last-child{border-bottom:none}
+.sumrow span:first-child{color:var(--mut)}
+.tabs2{display:flex;gap:8px;margin:12px 0}
+.tab2{flex:1;text-align:center;padding:9px;border-radius:10px;border:1px solid var(--border);background:#0e1626;color:var(--mut);font-size:13px;font-weight:600;cursor:pointer}
+.tab2.on{background:var(--grn);color:#04140a;border-color:var(--grn)}
+.bkitem2{background:#0e1626;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.bkitem2 .r1{display:flex;justify-content:space-between;align-items:center;font-size:13.5px;font-weight:600}
+.bkitem2 .r2{color:var(--mut);font-size:12px;margin-top:3px}
 </style>
 </head>
 <body>
 <header>
-  <div class="hdrow"><img class="logo" src="https://images.squarespace-cdn.com/content/6a89ec1760403d36a489e15a/f07fd7f4-fb71-4da0-861c-1c2f344bbd3e/rma-logo-circle.jpg?format=100w" alt="Royal Multisport Arena"><h1>Royal <span>Multisport Arena</span></h1></div>
+  <div class="hdrow"><img class="logo" src="https://images.squarespace-cdn.com/content/6a89ec1760403d36a489e15a/f07fd7f4-fb71-4da0-861c-1c2f344bbd3e/rma-logo-circle.jpg?format=100w" alt="Royal Multisport Arena"><h1>Royal <span>Multisport Arena</span></h1><div class="hicon" onclick="openMyBookings()" title="My Bookings">📋</div></div>
   <div class="sub">Book your slot · Premium turf · Shamlapur Western City, Bhakurta, Dhaka · ☎ <a style="color:#22c55e" href="tel:+8801886542122">01886-542122</a></div>
 </header>
 <main>
   <div class="dates" id="dates"></div>
   <div class="slots" id="slots"><div style="color:var(--mut);font-size:13px;padding:20px;text-align:center">Loading slots…</div></div>
-
-  <div class="mybk" id="mybk" style="display:none"><h3>📋 My Bookings</h3><div id="mybkList"></div></div>
 
   <footer>Pending bookings are confirmed by our team after advance verification.<br>Need help? Call <a style="color:#22c55e" href="tel:+8801886542122">01886-542122</a></footer>
 </main>
@@ -72,12 +84,40 @@ footer{text-align:center;color:var(--mut);font-size:11.5px;margin-top:30px;line-
     <input id="fName" placeholder="e.g. Rakib">
     <label>Phone number (this is your client ID)</label>
     <input id="fPhone" placeholder="01XXXXXXXXX" inputmode="numeric" maxlength="11">
-    <div class="note">To confirm instantly, send the <b id="advAmt"></b> advance to bKash <b id="bkNum"></b> (Send Money) and enter the TrxID below. Or skip it — we'll call you to confirm.</div>
-    <label>bKash TrxID (optional)</label>
-    <input id="fTrx" placeholder="e.g. 9K7A2B34XY">
+    <div class="note">To confirm instantly, send your advance via bKash or Nagad to <b id="bkNum"></b> (Send Money) and enter the reference number below. Or skip it — we'll call you to confirm.</div>
+    <label>Payment reference number (optional)</label>
+    <input id="fTrx" placeholder="e.g. bKash/Nagad TxnID">
     <div class="err" id="fErr"></div>
     <button class="btn" id="fGo">Request Booking</button>
     <button class="btn sec" onclick="closeSheet()">Cancel</button>
+  </div>
+</div>
+<div class="sheet" id="confirmSheet">
+  <div class="form">
+    <div class="ckwrap">
+      <div class="ck">✓</div>
+      <h3>Booking requested</h3>
+      <div class="fp" id="cfRef"></div>
+    </div>
+    <div class="note" id="cfNote" style="margin-bottom:14px"></div>
+    <div class="sumrow"><span>Sport</span><span>Football Turf</span></div>
+    <div class="sumrow"><span>Date</span><span id="cfDate"></span></div>
+    <div class="sumrow"><span>Time</span><span id="cfTime"></span></div>
+    <div class="sumrow"><span>Amount</span><span id="cfAmt"></span></div>
+    <div class="sumrow"><span>Status</span><span class="badge b-pen">Pending</span></div>
+    <button class="btn sec" id="cfCal" style="margin-top:16px">📅 Add to calendar</button>
+    <button class="btn" onclick="closeConfirm()">Done</button>
+  </div>
+</div>
+<div class="sheet" id="mbSheet">
+  <div class="form">
+    <h3>My Bookings</h3>
+    <div class="tabs2">
+      <div class="tab2 on" id="tabUp" onclick="switchMbTab('up')">Upcoming</div>
+      <div class="tab2" id="tabPast" onclick="switchMbTab('past')">Past</div>
+    </div>
+    <div id="mbList"><div style="color:var(--mut);font-size:13px;text-align:center;padding:16px 0">Loading…</div></div>
+    <button class="btn sec" onclick="closeMyBookings()">Close</button>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -90,6 +130,7 @@ firebase.auth().signInAnonymously().catch(e=>console.error(e));
 let selDate = null, selSlot = null, unsub = null, SLOTCFG = null;
 const $ = id => document.getElementById(id);
 const fmt = n => '৳'+n.toLocaleString('en-IN');
+function shortRef(id){let h=0;for(let i=0;i<id.length;i++){h=(h*31+id.charCodeAt(i))>>>0;}return 'RMA-'+h.toString(36).toUpperCase().slice(-6);}
 const todayStr = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
 
 function applySlotCfg(cfg){
@@ -159,7 +200,6 @@ function openSheet(slotT){
   const s=SLOTS.find(x=>x.t===slotT);
   $('fTitle').textContent='Book '+s.label;
   $('fSub').textContent=new Date(selDate+'T00:00:00').toDateString()+' · '+fmt(slotPrice(selDate,slotT));
-  $('advAmt').textContent=fmt(VENUE.advance);
   $('bkNum').textContent=VENUE.bkash;
   $('fName').value=localStorage.getItem('rma_name')||'';
   $('fPhone').value=localStorage.getItem('rma_phone')||'';
@@ -185,8 +225,7 @@ $('fGo').onclick=async ()=>{
     });
     localStorage.setItem('rma_name',name); localStorage.setItem('rma_phone',phone);
     db.collection('clients').doc(phone).set({name,phone,last:selDate},{merge:true}).catch(()=>{});
-    closeSheet(); toast(trx?'Request sent! We will verify your advance and confirm shortly. ✅':'Request sent! We will call you to confirm. 📞');
-    loadMyBookings();
+    closeSheet(); showConfirm(id, trx);
   }catch(e){
     err.textContent = e.code==='permission-denied' ? 'Sorry — this slot was just taken. Pick another.' : 'Could not book: '+e.message;
     err.style.display='block';
@@ -197,22 +236,52 @@ $('fGo').onclick=async ()=>{
 
 function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',5000);}
 
+function showConfirm(id, trx){
+  const s = SLOTS.find(x=>x.t===selSlot);
+  $('cfRef').textContent = 'Ref '+shortRef(id);
+  $('cfNote').textContent = trx ? 'We will verify your payment and confirm shortly.' : "We'll call you shortly to confirm.";
+  $('cfDate').textContent = new Date(selDate+'T00:00:00').toDateString();
+  $('cfTime').textContent = s ? s.label : selSlot;
+  $('cfAmt').textContent = fmt(slotPrice(selDate,selSlot));
+  const [h,m] = selSlot.split(':').map(Number);
+  const startD = new Date(selDate+'T00:00:00'); startD.setHours(h,m,0,0);
+  const endD = new Date(startD.getTime()+90*60000);
+  const gcal = d => d.toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
+  $('cfCal').onclick = ()=>{
+    const url='https://calendar.google.com/calendar/render?action=TEMPLATE&text='+encodeURIComponent('Royal Multisport Arena - Football Turf')+'&dates='+gcal(startD)+'/'+gcal(endD)+'&details='+encodeURIComponent('Booking ref '+shortRef(id))+'&location='+encodeURIComponent('Shamlapur Western City, Bhakurta, Dhaka');
+    window.open(url,'_blank');
+  };
+  $('confirmSheet').classList.add('on');
+}
+function closeConfirm(){$('confirmSheet').classList.remove('on'); loadDay(selDate);}
+let mbTab='up';
+function openMyBookings(){$('mbSheet').classList.add('on'); switchMbTab('up');}
+function closeMyBookings(){$('mbSheet').classList.remove('on');}
+async function switchMbTab(tab){
+  mbTab=tab;
+  $('tabUp').classList.toggle('on',tab==='up');
+  $('tabPast').classList.toggle('on',tab==='past');
+  await loadMyBookings();
+}
 async function loadMyBookings(){
-  const phone=localStorage.getItem('rma_phone'); if(!phone)return;
-  const snap=await db.collection('bookings').where('phone','==',phone).where('date','>=',todayStr()).get().catch(()=>null);
-  if(!snap||snap.empty)return;
-  $('mybk').style.display='block';
-  const list=$('mybkList'); list.innerHTML='';
-  const items=[]; snap.forEach(d=>items.push(d.data()));
-  items.sort((a,b)=>a.date.localeCompare(b.date));
-  items.forEach(b=>{
+  const phone=localStorage.getItem('rma_phone');
+  const list=$('mbList');
+  if(!phone){ list.innerHTML='<div style="color:var(--mut);font-size:13px;text-align:center;padding:16px 0">Book a slot first to see your bookings here.</div>'; return; }
+  list.innerHTML='<div style="color:var(--mut);font-size:13px;text-align:center;padding:16px 0">Loading…</div>';
+  let q = db.collection('bookings').where('phone','==',phone);
+  q = mbTab==='up' ? q.where('date','>=',todayStr()) : q.where('date','<',todayStr());
+  const snap = await q.get().catch(()=>null);
+  if(!snap||snap.empty){ list.innerHTML='<div style="color:var(--mut);font-size:13px;text-align:center;padding:16px 0">No '+(mbTab==='up'?'upcoming':'past')+' bookings.</div>'; return; }
+  const items=[]; snap.forEach(d=>items.push(Object.assign({id:d.id}, d.data())));
+  items.sort((a,b)=> mbTab==='up' ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date));
+  list.innerHTML = items.map(b=>{
     const s=SLOTS.find(x=>x.t===b.slot);
     const cls=b.status==='confirmed'?'b-av':b.status==='pending'?'b-pen':'b-bk';
-    list.innerHTML+=`<div class="bkitem"><span>${b.date} · ${s?s.label:b.slot}</span><span class="badge ${cls}">${b.status}</span></div>`;
-  });
+    return '<div class="bkitem2"><div class="r1"><span>'+(s?s.label:b.slot)+'</span><span class="badge '+cls+'">'+b.status+'</span></div><div class="r2">'+b.date+' · '+fmt(b.price)+'</div></div>';
+  }).join('');
 }
 
-buildDates(); loadSlotCfg(); loadDay(selDate); loadMyBookings();
+buildDates(); loadSlotCfg(); loadDay(selDate);
 </script>
 </body>
 </html>
