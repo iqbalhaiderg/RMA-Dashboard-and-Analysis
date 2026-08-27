@@ -10,7 +10,7 @@ const FIREBASE_CONFIG = {
 };
 
 // 2) Optional: Apps Script webhook URL for syncing confirmed bookings to your Google Sheet (SETUP.md step 6)
-const SHEET_WEBHOOK = "";
+const SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbxvE-8Fyk_-Jv1EmFfsLVSMUTojjrSJO3SiRh5cOR9wCzQYiKYoXwh6-v7EZfLrDo1C/exec";
 
 // Venue settings
 const VENUE = {
