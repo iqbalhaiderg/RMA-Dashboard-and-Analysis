@@ -104,7 +104,7 @@ footer{color:var(--mut);font-size:11.5px;margin-top:26px;text-align:center}
   <div id="invNote" style="color:var(--mut);font-size:12px;margin-top:10px;line-height:1.5"></div>
 </div>
 
-<div class="sec">🔮 Profit Forecast — Aug 2026 → Dec 2027</div>
+<div class="sec" id="fcTitle">🔮 Profit Forecast — Aug 2026 → Dec 2027</div>
 <div class="card" style="margin-bottom:14px">
   <h3>Seasonality × current run-rate, with proposed new slot pricing <span class="hint">weekday day ৳2,500 / eve ৳4,500 · weekend (Fri–Sat) day ৳3,000 / eve ৳5,000</span></h3>
   <div class="kpis" id="fcKpis" style="margin-bottom:14px"></div>
@@ -274,7 +274,7 @@ function renderForecast(){
   DATA.sales.forEach(s=>{const m=s.date.slice(0,7);(mm[m]=mm[m]||{r:0,e:0}).r+=s.paid;});
   DATA.txns.forEach(t=>{const m=t.date.slice(0,7);mm[m]=mm[m]||{r:0,e:0};if(t.type==='Expense'&&!t.cat.startsWith('I -'))mm[m].e+=t.amount;else mm[m].r+=t.amount;});
   const months=Object.keys(mm).sort();
-  const lastFull = DATA.maxDate.endsWith(String(new Date(+DATA.maxDate.slice(0,4),+DATA.maxDate.slice(5,7),0).getDate())) ? months[months.length-1] : months[months.length-2];
+  const now=new Date();const curYM=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');const daysInCurMonth=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();const prevD=new Date(now.getFullYear(),now.getMonth()-1,1);const prevYM=prevD.getFullYear()+'-'+String(prevD.getMonth()+1).padStart(2,'0');const lastFull = now.getDate()>=daysInCurMonth ? curYM : prevYM;
   const full=months.filter(m=>m>'2023-12'&&m<=lastFull);
   // seasonal index per calendar month (detrended: each month relative to its own year's average)
   const yearMean={};
@@ -303,6 +303,7 @@ function renderForecast(){
   // forecast months: after lastFull through 2027-12
   const fM=[];let d=new Date(+lastFull.slice(0,4),+lastFull.slice(5,7),1);
   while(true){const m=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;if(m>'2027-12')break;fM.push(m);d.setMonth(d.getMonth()+1);}
+  const fMonNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];const fcTitleEl=document.getElementById('fcTitle');if(fcTitleEl&&fM.length)fcTitleEl.textContent='🔮 Profit Forecast — '+fMonNames[+fM[0].slice(5,7)-1]+' '+fM[0].slice(0,4)+' → Dec 2027';
   const fRev=fM.map(m=>base*idx[+m.slice(5,7)]);
   const fProf=fRev.map(r=>r-expBase+10000);
   const fProfNew=fRev.map(r=>r*uplift-expBase+10000);
@@ -313,7 +314,8 @@ function renderForecast(){
     ['Revenue Uplift from New Pricing', pct(uplift-1), 'vs realized prices, last 90 days mix'],
     ['Cumulative Profit → Dec 2027', fmt(cum), 'current prices'],
     ['Cumulative Profit → Dec 2027', fmt(cumNew), 'new prices'],
-    ['Extra for Turf Fund @70% saved', fmt((cumNew-cum)*0.7), 'from the price rise alone'],
+    ['Reserved for Investment (30%)', fmt(cumNew*0.3), 'set aside from profit, new-price scenario'],
+    ['Distributable to Owners (70%)', fmt(cumNew*0.7), 'available after investment reserve'],
   ].map(k=>`<div class="kpi"><div class="l">${k[0]}</div><div class="v">${k[1]}</div><div class="d">${k[2]}</div></div>`).join('');
   destroy('fc');
   charts.fc=new Chart(cFc,{data:{labels:fM,datasets:[
