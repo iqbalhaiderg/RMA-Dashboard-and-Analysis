@@ -250,17 +250,17 @@ function render(){
   document.getElementById('heat').innerHTML=h+'</div>';
 
   // Top clients
-  const cl={};S.forEach(s=>{(cl[s.client]=cl[s.client]||{n:0,r:0,last:''}).n++;cl[s.client].r+=s.paid;if(s.date>cl[s.client].last)cl[s.client].last=s.date;});
+  const cl={};S.forEach(s=>{const k=s.phone?('P:'+s.phone):('N:'+s.client);(cl[k]=cl[k]||{n:0,r:0,last:'',name:s.client}).n++;cl[k].r+=s.paid;cl[k].name=s.client;if(s.date>cl[k].last)cl[k].last=s.date;});
   const tc=Object.entries(cl).sort((a,b)=>b[1].r-a[1].r).slice(0,15);
   document.getElementById('tTop').innerHTML='<tr><th>#</th><th>Client</th><th class="r">Bookings</th><th class="r">Revenue</th><th class="r">Last Visit</th></tr>'+
-    tc.map((c,i)=>`<tr><td>${i+1}</td><td>${c[0]}</td><td class="r">${c[1].n}</td><td class="r">${fmt(c[1].r)}</td><td class="r">${c[1].last}</td></tr>`).join('');
+    tc.map((c,i)=>`<tr><td>${i+1}</td><td>${c[1].name}</td><td class="r">${c[1].n}</td><td class="r">${fmt(c[1].r)}</td><td class="r">${c[1].last}</td></tr>`).join('');
 
   // Lapsed regulars (lifetime, not period-filtered)
-  const all={};DATA.sales.forEach(s=>{(all[s.client]=all[s.client]||{n:0,r:0,last:''}).n++;all[s.client].r+=s.paid;if(s.date>all[s.client].last)all[s.client].last=s.date;});
+  const all={};DATA.sales.forEach(s=>{const k=s.phone?('P:'+s.phone):('N:'+s.client);(all[k]=all[k]||{n:0,r:0,last:'',name:s.client}).n++;all[k].r+=s.paid;all[k].name=s.client;if(s.date>all[k].last)all[k].last=s.date;});
   const cutoff=new Date(DATA.maxDate);cutoff.setDate(cutoff.getDate()-60);
   const lapsed=Object.entries(all).filter(([k,v])=>v.n>=5&&new Date(v.last)<cutoff).sort((a,b)=>b[1].r-a[1].r);
   document.getElementById('tLapsed').innerHTML='<tr><th>Client</th><th class="r">Lifetime Bookings</th><th class="r">Lifetime Value</th><th class="r">Last Visit</th></tr>'+
-    lapsed.slice(0,25).map(c=>`<tr><td>${c[0]}</td><td class="r">${c[1].n}</td><td class="r">${fmt(c[1].r)}</td><td class="r">${c[1].last}</td></tr>`).join('');
+    lapsed.slice(0,25).map(c=>`<tr><td>${c[1].name}</td><td class="r">${c[1].n}</td><td class="r">${fmt(c[1].r)}</td><td class="r">${c[1].last}</td></tr>`).join('');
 
   renderInsights({S,rev,expTot,profit,occ,avg,ec,sl,dw,mm,months,lapsed,all,nDays,otherInc});
   renderInvestor();
@@ -551,7 +551,7 @@ async function fetchAppLive(){
     const liveSales=[];
     snap.forEach(d=>{
       const b=d.data();
-      liveSales.push({id:d.id, date:b.date, client:b.client||b.name||'', slot:b.slot, type: SLOT_EVE[b.slot]?'Peak':'Off', amount:(+b.price||0), paid:(+b.paid||0)});
+      liveSales.push({id:d.id, date:b.date, client:b.client||b.name||'', phone:b.phone||'', slot:b.slot, type: SLOT_EVE[b.slot]?'Peak':'Off', amount:(+b.price||0), paid:(+b.paid||0)});
     });
     APP_SALES = liveSales;
     let liveTxns=[];
