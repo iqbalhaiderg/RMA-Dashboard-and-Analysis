@@ -189,16 +189,29 @@ function slotSel(sel){
 }
 function methodSel(sel){sel.innerHTML=PAY_METHODS.map(m=>`<option>${m}</option>`).join('');}
 let M_SELECTED=new Set();
-function renderMSlotGrid(){
+async function renderMSlotGrid(){
   const ds=$('mDate').value;
   const active=SLOTCFG?SLOTCFG.active:null;
-  const el=$('mSlotGrid'); if(!el)return; el.innerHTML='';
+  const el=$('mSlotGrid'); if(!el)return;
+  el.innerHTML='<div class="mini">Loading availability…</div>';
+  const snap=await db.collection('bookings').where('date','==',ds).get().catch(()=>null);
+  const taken={};
+  if(snap) snap.forEach(d=>{ const b=d.data(); taken[b.slot]=b.status; });
+  if($('mDate').value!==ds)return;
+  el.innerHTML='';
   SLOTS.filter(s=>!active||active[s.t]!==false).forEach(s=>{
     const price=slotPrice(ds,s.t);
+    const st=taken[s.t];
     const div=document.createElement('div');
-    div.className='cell'+(M_SELECTED.has(s.t)?' sel':'');
-    div.innerHTML=`<div>${s.label}</div><div class="st">${fmt(price)}</div>`;
-    div.onclick=()=>{ M_SELECTED.has(s.t)?M_SELECTED.delete(s.t):M_SELECTED.add(s.t); renderMSlotGrid(); };
+    if(st){
+      div.className='cell '+(st==='pending'?'pen':'conf');
+      div.style.opacity='.6'; div.style.cursor='not-allowed';
+      div.innerHTML=`<div>${s.label}</div><div class="st">${st==='blocked'?'Blocked':st.toUpperCase()}</div>`;
+    }else{
+      div.className='cell'+(M_SELECTED.has(s.t)?' sel':'');
+      div.innerHTML=`<div>${s.label}</div><div class="st">${fmt(price)}</div>`;
+      div.onclick=()=>{ M_SELECTED.has(s.t)?M_SELECTED.delete(s.t):M_SELECTED.add(s.t); renderMSlotGrid(); };
+    }
     el.appendChild(div);
   });
   const total=[...M_SELECTED].reduce((sum,t)=>sum+slotPrice(ds,t),0);
@@ -208,7 +221,7 @@ function renderMSlotGrid(){
 function init(){
   ['mDate','calDate','tDate'].forEach(i=>$(i).value=todayStr());
   methodSel($('mMethod')); methodSel($('tMethod'));
-  $('mDate').onchange=()=>renderMSlotGrid();
+  $('mDate').onchange=()=>{M_SELECTED.clear(); renderMSlotGrid();};
   renderMSlotGrid();
   $('calDate').onchange=()=>renderCal();
     const abF=new Date(),abT=new Date(); abF.setDate(abF.getDate()-30); abT.setDate(abT.getDate()+60);
@@ -297,8 +310,9 @@ function renderReqItems(){
   const items=REQ_ITEMS.filter(b=>matchesReqFilter(b,clientVal,dateVal));
   el.innerHTML=items.length?'':'<div class="mini">No pending requests 🎉</div>';
   items.forEach(b=>{
-    el.innerHTML+=`<div class="bk"><div><b>${b.date} ${b.slot}</b> · ${b.client}<div class="mini">${fmt(b.price)} · adv ${fmt(b.advance||0)} ${b.trxId?'· TrxID <b style="color:var(--amb)">'+b.trxId+'</b>':''} · ${b.source||'web'}</div></div>
-      <div><button class="btn" style="margin:0" onclick="manageBooking('${b.id}')">Review &amp; Confirm</button>
+    ABCACHE[b.id]=b;
+    el.innerHTML+=`<div class="bk" id="reqrow_${b.id}"><div><b>${b.date} ${b.slot}</b> · ${b.client}<div class="mini">${fmt(b.price)} · adv ${fmt(b.advance||0)} ${b.trxId?'· TrxID <b style="color:var(--amb)">'+b.trxId+'</b>':''} · ${b.source||'web'}</div></div>
+      <div><button class="btn" style="margin:0" onclick="toggleEdit('${b.id}','reqrow_')">Review &amp; Confirm</button>
       <button class="btn danger" style="margin:0" onclick="rejectBk('${b.id}')">Reject</button></div></div>`;
   });
 }
@@ -309,11 +323,12 @@ function renderConfItems(){
   el.innerHTML=items.length?'':'<div class="mini">Nothing upcoming.</div>';
   el.innerHTML+='<div class="mini" style="margin-bottom:6px">Payments &amp; edits for any booking (past or upcoming) are managed in the All Bookings tab.</div>';
   items.forEach(b=>{
+    ABCACHE[b.id]=b;
     const fullyPaid=(+b.paid||0)>=(+b.price||0);
     const payBadge=fullyPaid?'<span class="badge b-conf" style="margin-right:6px">Paid</span>':'<span class="badge b-pen" style="margin-right:6px">Due '+fmt((+b.price||0)-(+b.paid||0))+'</span>';
-    el.innerHTML+=`<div class="bk"><div><b>${b.date} ${b.slot}</b> · ${b.client}<div class="mini">${fmt(b.price)} · paid ${fmt(b.paid||0)} (${b.method||'—'})</div></div>
+    el.innerHTML+=`<div class="bk" id="confrow_${b.id}"><div><b>${b.date} ${b.slot}</b> · ${b.client}<div class="mini">${fmt(b.price)} · paid ${fmt(b.paid||0)} (${b.method||'—'})</div></div>
       <div>${payBadge}
-      <button class="btn ghost" style="margin:0" onclick="manageBooking('${b.id}')">✎ Manage</button></div></div>`;
+      <button class="btn ghost" style="margin:0" onclick="toggleEdit('${b.id}','confrow_')">✎ Manage</button></div></div>`;
   });
 }
 function watchRequests(){
@@ -371,9 +386,10 @@ function loadAllBookings(){
     $('abList').innerHTML=items.map(b=>bkRowHtml(b.id,b)).join('')||'<div class="mini" style="padding:10px">No bookings match.</div>';
   }).catch(e=>{ $('abList').innerHTML='<div class="mini" style="color:var(--red)">Error: '+e.message+'</div>'; });
 }
-function toggleEdit(id){
+function toggleEdit(id, prefix){
+  prefix = prefix || 'row_';
   const b=ABCACHE[id]; if(!b)return;
-  const row=$('row_'+id); if(!row)return;
+  const row=$(prefix+id); if(!row)return;
   if(row.nextElementSibling && row.nextElementSibling.classList.contains('editform')){ row.nextElementSibling.remove(); return; }
   document.querySelectorAll('.editform').forEach(f=>f.remove());
   const form=document.createElement('div');
@@ -388,7 +404,7 @@ function toggleEdit(id){
     <div class="row"><div><label>Method</label><select id="ed_method_${id}"></select></div>
     <div><label>Status</label><select id="ed_status_${id}"><option value="pending">Pending</option><option value="confirmed">Confirmed</option><option value="blocked">Blocked</option></select></div></div>
     <button class="btn" onclick="saveEdit('${id}')">💾 Save Changes</button>
-    <button class="btn ghost" onclick="toggleEdit('${id}')">Close</button>`;
+    <button class="btn ghost" onclick="toggleEdit('${id}','${prefix}')">Close</button>`;
   row.after(form);
   slotSel($('ed_slot_'+id)); $('ed_slot_'+id).value=b.slot;
   methodSel($('ed_method_'+id)); $('ed_method_'+id).value=b.method||'Cash';
