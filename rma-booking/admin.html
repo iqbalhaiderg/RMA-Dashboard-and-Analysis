@@ -326,7 +326,7 @@ function renderConfItems(){
     ABCACHE[b.id]=b;
     const fullyPaid=(+b.paid||0)>=(+b.price||0);
     const payBadge=fullyPaid?'<span class="badge b-conf" style="margin-right:6px">Paid</span>':'<span class="badge b-pen" style="margin-right:6px">Due '+fmt((+b.price||0)-(+b.paid||0))+'</span>';
-    el.innerHTML+=`<div class="bk" id="confrow_${b.id}"><div><b>${b.date} ${b.slot}</b> · ${b.client}<div class="mini">${fmt(b.price)} · paid ${fmt(b.paid||0)} (${b.method||'—'})</div></div>
+    el.innerHTML+=`<div class="bk" id="confrow_${b.id}"><div><b>${b.date} ${b.slot}</b> · ${b.client}<div class="mini">${fmt(b.price)} · paid ${fmt(b.paid||0)}${b.discount?(' · disc '+fmt(b.discount)):''} (${b.method||'—'})</div></div>
       <div>${payBadge}
       <button class="btn ghost" style="margin:0" onclick="toggleEdit('${b.id}','confrow_')">✎ Manage</button></div></div>`;
   });
@@ -367,7 +367,7 @@ let ABCACHE={};
 function bkRowHtml(id,b){
   const cls=b.status==='pending'?'b-pen':b.status==='blocked'?'b-bl':'b-conf';
   return `<div class="bk" id="row_${id}">
-    <div><b>${b.date} ${b.slot}</b> · ${b.client||b.name||'—'}<div class="mini">${fmt(b.price)} · paid ${fmt(b.paid||0)} · ${b.method||'—'} · <span class="badge ${cls}">${b.status}</span></div></div>
+    <div><b>${b.date} ${b.slot}</b> · ${b.client||b.name||'—'}<div class="mini">${fmt(b.price)} · paid ${fmt(b.paid||0)}${b.discount?(' · disc '+fmt(b.discount)):''} · ${b.method||'—'} · <span class="badge ${cls}">${b.status}</span></div></div>
     <div><button class="btn ghost" style="margin:0" onclick="toggleEdit('${id}')">✎ Edit</button>
     <button class="btn danger" style="margin:0" onclick="cancelBooking('${id}','${(b.date+' '+b.slot).replace(/'/g,"")}')">✕ Cancel</button></div>
   </div>`;
@@ -401,6 +401,8 @@ function toggleEdit(id, prefix){
     <div><label>Phone</label><input id="ed_phone_${id}" value="${b.phone||''}"></div></div>
     <div class="row"><div><label>Price</label><input type="number" id="ed_price_${id}" value="${b.price||0}"></div>
     <div><label>Paid</label><input type="number" id="ed_paid_${id}" value="${b.paid||0}"></div></div>
+    <div class="row"><div><label>Discount</label><input type="number" id="ed_disc_${id}" value="${b.discount||0}"></div>
+    <div><label>&nbsp;</label><button type="button" class="btn ghost" style="margin:0;width:100%" onclick="applyDiscount('${id}')">➖ Apply to Price</button></div></div>
     <div class="row"><div><label>Method</label><select id="ed_method_${id}"></select></div>
     <div><label>Status</label><select id="ed_status_${id}"><option value="pending">Pending</option><option value="confirmed">Confirmed</option><option value="blocked">Blocked</option></select></div></div>
     <button class="btn" onclick="saveEdit('${id}')">💾 Save Changes</button>
@@ -410,15 +412,22 @@ function toggleEdit(id, prefix){
   methodSel($('ed_method_'+id)); $('ed_method_'+id).value=b.method||'Cash';
   $('ed_status_'+id).value=b.status;
 }
+function applyDiscount(id){
+  const priceEl=$('ed_price_'+id), discEl=$('ed_disc_'+id);
+  const disc=+discEl.value||0;
+  if(disc<=0){ toast('Enter a discount amount first'); return; }
+  priceEl.value=Math.max(0,(+priceEl.value||0)-disc);
+  toast('Discount applied to price — remember to Save Changes');
+}
 async function saveEdit(id){
   const old=ABCACHE[id]; if(!old)return;
   const newDate=$('ed_date_'+id).value, newSlot=$('ed_slot_'+id).value;
   const name=$('ed_name_'+id).value.trim(), phone=$('ed_phone_'+id).value.trim();
   if(phone && !/^01\d{9}$/.test(phone)){ toast('⚠ Enter a valid 11-digit phone number (01XXXXXXXXX)'); return; }
-  const price=+$('ed_price_'+id).value||0, paid=+$('ed_paid_'+id).value||0;
+  const price=+$('ed_price_'+id).value||0, paid=+$('ed_paid_'+id).value||0, discount=+$('ed_disc_'+id).value||0;
   const method=$('ed_method_'+id).value, status=$('ed_status_'+id).value;
   const newId=newDate+'_'+newSlot.replace(':','');
-  const data={date:newDate,slot:newSlot,name,phone,client:name+(phone?' '+phone:''),price,paid,method,status,
+  const data={date:newDate,slot:newSlot,name,phone,client:name+(phone?' '+phone:''),price,paid,discount,method,status,
     payStatus:paid>=price?'Paid':(paid>0?'Partially paid':'Due'),
     source:old.source||'admin',by:ME.email,editedAt:firebase.firestore.FieldValue.serverTimestamp()};
   if(status==='confirmed' && old.status!=='confirmed'){ data.confirmedBy=ME.email; data.confirmedAt=firebase.firestore.FieldValue.serverTimestamp(); }
