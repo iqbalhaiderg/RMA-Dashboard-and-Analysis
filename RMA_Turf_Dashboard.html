@@ -58,6 +58,12 @@ tr:hover td{background:#14203a}
 .tag.g{background:#0f2a4a;color:var(--grn)}.tag.a{background:#3a2a08;color:var(--amb)}.tag.r{background:#3a1414;color:#f87171}.tag.c{background:#082f3a;color:#22d3ee}
 .sec{font-size:16px;margin:22px 0 12px;display:flex;align-items:center;gap:8px}
 .sec:before{content:'';width:4px;height:18px;background:var(--grn);border-radius:2px;display:inline-block}
+.pl-controls{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:14px}
+.pl-field{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--mut)}
+.pl-field input,.pl-field select{background:var(--card2);border:1px solid var(--border);color:var(--txt);border-radius:6px;padding:6px 8px;font-size:12.5px;font-family:inherit}
+.pl-field input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.8)}
+.pl-btn{background:var(--grn);color:#04140a;border:none;border-radius:20px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;height:34px}
+.pl-btn:hover{background:var(--grn2)}
 footer{color:var(--mut);font-size:11.5px;margin-top:26px;text-align:center}
 </style>
 </head>
@@ -92,6 +98,20 @@ footer{color:var(--mut);font-size:11.5px;margin-top:26px;text-align:center}
 <div class="grid g22">
   <div class="card"><h3>Top 15 Clients <span class="hint">by revenue, selected period</span></h3><div style="max-height:340px;overflow:auto"><table id="tTop"></table></div></div>
   <div class="card"><h3>⚠ Lapsed Regulars — Win-back List <span class="hint">5+ lifetime bookings, inactive 60+ days</span></h3><div style="max-height:340px;overflow:auto"><table id="tLapsed"></table></div></div>
+</div>
+
+<div class="sec">📄 Profit &amp; Loss Statement</div>
+<div class="card" style="margin-bottom:14px">
+  <h3>Generate a P&amp;L for any date range <span class="hint">optionally compare to a prior period</span></h3>
+  <div class="pl-controls">
+    <div class="pl-field"><label>From</label><input type="date" id="plFrom"></div>
+    <div class="pl-field"><label>To</label><input type="date" id="plTo"></div>
+    <div class="pl-field"><label>Compare to</label><select id="plCompareMode"><option value="none">No comparison</option><option value="prev">Previous period (same length)</option><option value="yoy">Same period, last year</option><option value="custom">Custom range</option></select></div>
+    <div class="pl-field pl-custom" id="plCustomFrom" style="display:none"><label>Compare From</label><input type="date" id="plCFrom"></div>
+    <div class="pl-field pl-custom" id="plCustomTo" style="display:none"><label>Compare To</label><input type="date" id="plCTo"></div>
+    <button id="plGenerate" class="pl-btn">Generate</button>
+  </div>
+  <div id="plOut"><div style="color:var(--mut);font-size:12.5px">Pick a date range above and click Generate.</div></div>
 </div>
 
 <div class="sec">💼 Investor View</div>
@@ -610,6 +630,92 @@ async function loadLive(){
   }
 }
 DATA=prep(RAW); buildFilters(); render(); loadLive(); fetchAppLive();
+function computePL(from,to){
+  const S = DATA.sales.filter(s=>s.date>=from && s.date<=to);
+  const T = DATA.txns.filter(t=>t.date>=from && t.date<=to);
+  const exp = T.filter(t=>t.type==='Expense' && !t.cat.startsWith('I -'));
+  const otherIncTxns = T.filter(t=>t.cat.startsWith('I -'));
+  const bookingRev = S.reduce((a,s)=>a+s.paid,0);
+  const otherInc = otherIncTxns.reduce((a,t)=>a+t.amount,0);
+  const rev = bookingRev + otherInc;
+  const expByCat = {};
+  exp.forEach(t=>{expByCat[t.cat]=(expByCat[t.cat]||0)+t.amount;});
+  const expTot = exp.reduce((a,t)=>a+t.amount,0);
+  const profit = rev - expTot;
+  return {from,to,bookingRev,otherInc,rev,expByCat,expTot,profit,bookings:S.length};
+}
+function plShiftRange(from,to,mode){
+  const fD=new Date(from+'T00:00:00'), tD=new Date(to+'T00:00:00');
+  const lenDays=Math.round((tD-fD)/864e5)+1;
+  if(mode==='prev'){
+    const newTo=new Date(fD); newTo.setDate(newTo.getDate()-1);
+    const newFrom=new Date(newTo); newFrom.setDate(newFrom.getDate()-(lenDays-1));
+    return [newFrom.toISOString().slice(0,10), newTo.toISOString().slice(0,10)];
+  }
+  if(mode==='yoy'){
+    const newFrom=new Date(fD); newFrom.setFullYear(newFrom.getFullYear()-1);
+    const newTo=new Date(tD); newTo.setFullYear(newTo.getFullYear()-1);
+    return [newFrom.toISOString().slice(0,10), newTo.toISOString().slice(0,10)];
+  }
+  return [from,to];
+}
+function plRow(label,a,b,bold,invert){
+  const cls = bold ? ' style="font-weight:700"' : '';
+  let cmpCells='';
+  if(b!=null){
+    const chg=a-b;
+    const good = invert ? chg<=0 : chg>=0;
+    const pctChg = b? (chg/Math.abs(b)*100) : null;
+    cmpCells = `<td class="r">${fmt(b)}</td><td class="r ${good?'up':'dn'}">${chg>=0?'▲':'▼'} ${fmt(Math.abs(chg))}${pctChg!=null?` (${chg>=0?'+':''}${pctChg.toFixed(1)}%)`:''}</td>`;
+  }
+  return `<tr${cls}><td>${label}</td><td class="r">${fmt(a)}</td>${cmpCells}</tr>`;
+}
+function renderPL(){
+  const fromEl=document.getElementById('plFrom'), toEl=document.getElementById('plTo');
+  const from=fromEl.value, to=toEl.value;
+  const out=document.getElementById('plOut');
+  if(!from||!to){out.innerHTML='<div style="color:var(--mut);font-size:12.5px">Pick a From and To date.</div>';return;}
+  if(from>to){out.innerHTML='<div style="color:var(--red);font-size:12.5px">From date must be before To date.</div>';return;}
+  const mode=document.getElementById('plCompareMode').value;
+  let cFrom=null,cTo=null;
+  if(mode==='custom'){cFrom=document.getElementById('plCFrom').value; cTo=document.getElementById('plCTo').value;}
+  else if(mode!=='none'){[cFrom,cTo]=plShiftRange(from,to,mode);}
+  const A=computePL(from,to);
+  const B=(cFrom&&cTo)?computePL(cFrom,cTo):null;
+  const cats=[...new Set([...Object.keys(A.expByCat), ...(B?Object.keys(B.expByCat):[])])].sort((x,y)=>(A.expByCat[y]||0)-(A.expByCat[x]||0));
+  const head = B
+    ? `<tr><th>Line item</th><th class="r">${A.from} → ${A.to}</th><th class="r">${B.from} → ${B.to}</th><th class="r">Change</th></tr>`
+    : `<tr><th>Line item</th><th class="r">${A.from} → ${A.to}</th></tr>`;
+  let rows='';
+  rows+=`<tr><td colspan="${B?4:2}" style="padding-top:12px;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.4px">Revenue</td></tr>`;
+  rows+=plRow('Booking revenue', A.bookingRev, B?B.bookingRev:null,false,false);
+  rows+=plRow('Other income', A.otherInc, B?B.otherInc:null,false,false);
+  rows+=plRow('Total revenue', A.rev, B?B.rev:null,true,false);
+  rows+=`<tr><td colspan="${B?4:2}" style="padding-top:12px;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.4px">Expenses</td></tr>`;
+  cats.forEach(c=>{rows+=plRow(c, A.expByCat[c]||0, B?(B.expByCat[c]||0):null,false,true);});
+  rows+=plRow('Total expenses', A.expTot, B?B.expTot:null,true,true);
+  rows+=`<tr><td colspan="${B?4:2}" style="padding-top:12px;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.4px">Result</td></tr>`;
+  rows+=plRow('Net profit', A.profit, B?B.profit:null,true,false);
+  const marginA = A.rev? (A.profit/A.rev*100) : 0;
+  const marginB = (B && B.rev)? (B.profit/B.rev*100) : null;
+  rows+=`<tr style="font-weight:700"><td>Net margin</td><td class="r">${marginA.toFixed(1)}%</td>${B?`<td class="r">${(marginB||0).toFixed(1)}%</td><td class="r ${marginA>=(marginB||0)?'up':'dn'}">${(marginA-(marginB||0)>=0?'+':'')}${(marginA-(marginB||0)).toFixed(1)} pts</td>`:''}</tr>`;
+  out.innerHTML = `<div style="overflow-x:auto"><table>${head}${rows}</table></div>
+    <div style="color:var(--mut);font-size:11.5px;margin-top:10px">${A.bookings.toLocaleString()} bookings in the primary period${B?` · ${B.bookings.toLocaleString()} in the comparison period`:''}.</div>`;
+}
+function plInitDefaults(){
+  const f=document.getElementById('plFrom'), t=document.getElementById('plTo');
+  if(f && !f.value) f.value = DATA.minDate;
+  if(t && !t.value) t.value = DATA.maxDate;
+  const gen=document.getElementById('plGenerate');
+  if(gen && !gen.dataset.wired){
+    gen.dataset.wired='1';
+    gen.addEventListener('click', renderPL);
+    document.getElementById('plCompareMode').addEventListener('change', e=>{
+      document.querySelectorAll('.pl-custom').forEach(el2=>{el2.style.display = e.target.value==='custom' ? 'flex' : 'none';});
+    });
+  }
+}
+plInitDefaults(); renderPL();
 </script>
 </body>
 </html>
