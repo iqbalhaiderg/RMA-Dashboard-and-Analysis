@@ -18,7 +18,7 @@ const VENUE = {
   phone: "01886-542122",
   bkash: "01886-542122", // bKash number clients send the advance to
   advance: 500,           // advance (BDT) required to confirm a booking
-  bookAheadDays: 14,      // how far ahead clients can book
+  bookAheadDays: 30,      // how far ahead clients can book
 };
 
 // Slot schedule. Weekend in Bangladesh = Friday & Saturday.
