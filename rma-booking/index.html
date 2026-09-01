@@ -8,6 +8,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="config.js"></script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-6G1WD314X7"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-6G1WD314X7');</script>
 <style>
 :root{--bg:#0b1220;--card:#111b2e;--border:#1e2a44;--txt:#e6edf7;--mut:#8b9bb8;--grn:#22c55e;--amb:#f59e0b;--red:#ef4444}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -225,6 +227,7 @@ $('fGo').onclick=async ()=>{
     });
     localStorage.setItem('rma_name',name); localStorage.setItem('rma_phone',phone);
     db.collection('clients').doc(phone).set({name,phone,last:selDate},{merge:true}).catch(()=>{});
+    if(typeof gtag==='function'){gtag('event','booking_request',{value:slotPrice(selDate,selSlot),currency:'BDT',method:trx?'advance_paid':'call_confirm'});}
     closeSheet(); showConfirm(id, trx);
   }catch(e){
     err.textContent = e.code==='permission-denied' ? 'Sorry — this slot was just taken. Pick another.' : 'Could not book: '+e.message;
