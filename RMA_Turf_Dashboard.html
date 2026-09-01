@@ -629,7 +629,7 @@ async function loadLive(){
     badge.style.background='#3a1414';badge.style.color='#f87171';
   }
 }
-DATA=prep(RAW); buildFilters(); render(); loadLive(); fetchAppLive();
+DATA=prep(RAW); buildFilters(); render(); loadLive().catch(function(){}).then(fetchAppLive);
 function computePL(from,to){
   const S = DATA.sales.filter(s=>s.date>=from && s.date<=to);
   const T = DATA.txns.filter(t=>t.date>=from && t.date<=to);
