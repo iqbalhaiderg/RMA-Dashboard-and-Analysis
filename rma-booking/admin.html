@@ -175,9 +175,13 @@ header>div{display:flex;align-items:center;gap:8px}
   </div>
 
   <div class="pane" id="pFin">
+    <div class="card"><h3>📅 Date Range</h3>
+      <div class="row"><div><label>From</label><input type="date" id="finFrom" onchange="loadTxns()"></div><div><label>To</label><input type="date" id="finTo" onchange="loadTxns()"></div></div>
+      <div class="mini" style="margin-top:6px">Defaults to the current month. Change the dates to view any period.</div>
+    </div>
     <div class="kpi3">
-      <div class="card"><div class="v" id="fRev">–</div><div class="l">Income (this month)</div></div>
-      <div class="card"><div class="v" id="fExp">–</div><div class="l">Expenses (this month)</div></div>
+      <div class="card"><div class="v" id="fRev">–</div><div class="l">Income</div></div>
+      <div class="card"><div class="v" id="fExp">–</div><div class="l">Expenses</div></div>
       <div class="card"><div class="v" id="fNet">–</div><div class="l">Net</div></div>
     </div>
     <div class="card"><h3>➕ New Entry</h3>
@@ -187,10 +191,14 @@ header>div{display:flex;align-items:center;gap:8px}
       <label>Amount (BDT)</label><input id="tAmt" type="number">
       <button class="btn" onclick="saveTxn()">Save Entry</button>
     </div>
-    <div class="card"><h3>📒 Recent Entries</h3><div style="max-height:300px;overflow:auto"><table id="tTable"></table></div></div>
+    <div class="card"><h3>💵 Income Details (reconciliation)</h3>
+      <div class="mini" style="margin-bottom:8px">Every confirmed booking payment and manual income entry in the selected range, with client name, phone, and discount for cross-checking against actual receipts.</div>
+      <div class="mini" id="finIncomeSum" style="margin-bottom:8px;font-weight:700"></div>
+      <div style="max-height:340px;overflow:auto"><table id="finIncomeTable"></table></div>
+    </div>
+    <div class="card"><h3>📒 Recent Manual Entries</h3><div style="max-height:300px;overflow:auto"><table id="tTable"></table></div></div>
   </div>
-
-  <div class="pane" id="pSet">
+<div class="pane" id="pSet">
     <div class="card"><h3>💰 Slot Categories &amp; Pricing</h3>
       <div class="mini" style="margin-bottom:8px">Set a price per category, then assign every slot to a category below.</div>
       <div id="catList"></div>
@@ -598,18 +606,42 @@ async function saveTxn(){
   $('tAmt').value='';$('tDet').value=''; toast('Entry saved ✅'); loadTxns();
 }
 let TXCACHE={};
-async function loadTxns(){
+function finRange(){
   const m=todayStr().slice(0,7);
+  const lastDay=new Date(+m.slice(0,4), +m.slice(5,7), 0).getDate();
+  if(!$('finFrom').value) $('finFrom').value=m+'-01';
+  if(!$('finTo').value) $('finTo').value=m+'-'+String(lastDay).padStart(2,'0');
+  return {from:$('finFrom').value, to:$('finTo').value};
+}
+async function loadTxns(){
+  const {from,to}=finRange();
   const snap=await db.collection('transactions').orderBy('created','desc').limit(40).get();
   TXCACHE={};
-  let rows='<tr><th>Date</th><th>Type</th><th>Head</th><th>Details</th><th class="r">Amount</th><th></th></tr>',inc=0,exp=0;
+  let rows='<tr><th>Date</th><th>Type</th><th>Head</th><th>Details</th><th class="r">Amount</th><th></th></tr>',exp=0,inc=0;
   snap.forEach(d=>{const t=d.data(); TXCACHE[d.id]=t;
     rows+=`<tr><td>${t.date}</td><td>${t.type==='Income'?'🟢':'🔴'}</td><td>${t.cat}</td><td>${t.details||''}</td><td class="r">${fmt(t.amount)}</td><td><button class="btn ghost" style="margin:0;padding:4px 8px;font-size:11px" onclick="editTxn('${d.id}')">✎</button> <button class="btn danger" style="margin:0;padding:4px 8px;font-size:11px" onclick="deleteTxn('${d.id}')">✕</button></td></tr>`;});
   $('tTable').innerHTML=rows;
-  const ms=await db.collection('transactions').where('date','>=',m+'-01').where('date','<=',m+'-31').get();
-  ms.forEach(d=>{const t=d.data(); if(t.type==='Income')inc+=t.amount;else exp+=t.amount;});
-  const bs=await db.collection('bookings').where('date','>=',m+'-01').where('date','<=',m+'-31').get();
-  bs.forEach(d=>{const b=d.data(); if(b.status==='confirmed')inc+=(+b.paid||0);});
+
+  const incRows=[];
+  const ms=await db.collection('transactions').where('date','>=',from).where('date','<=',to).get();
+  ms.forEach(d=>{const t=d.data();
+    if(t.type==='Income'){ inc+=(+t.amount||0); incRows.push({date:t.date,name:'Manual: '+(t.cat||'—'),phone:'',detail:t.details||'',discount:0,amount:+t.amount||0,method:t.method||'—'}); }
+    else exp+=(+t.amount||0);
+  });
+  const bs=await db.collection('bookings').where('date','>=',from).where('date','<=',to).get();
+  bs.forEach(d=>{const b=d.data();
+    if(b.status==='confirmed' && (+b.paid||0)>0){
+      inc+=(+b.paid||0);
+      incRows.push({date:b.date,name:b.name||b.client||'—',phone:b.phone||'',detail:b.slot||'',discount:+b.discount||0,amount:+b.paid||0,method:b.method||'—'});
+    }
+  });
+  incRows.sort((a,c)=>a.date<c.date?1:(a.date>c.date?-1:0));
+  let irows='<tr><th>Date</th><th>Client</th><th>Phone</th><th>Slot</th><th class="r">Discount</th><th class="r">Paid</th><th>Method</th></tr>';
+  incRows.forEach(r=>{ irows+=`<tr><td>${r.date}</td><td>${r.name}</td><td>${r.phone}</td><td>${r.detail}</td><td class="r">${r.discount?fmt(r.discount):'—'}</td><td class="r">${fmt(r.amount)}</td><td>${r.method}</td></tr>`; });
+  if(!incRows.length) irows+='<tr><td colspan="7" class="mini">No income entries in this range.</td></tr>';
+  $('finIncomeTable').innerHTML=irows;
+  $('finIncomeSum').textContent=incRows.length+' entrie(s) from '+from+' to '+to+' · Total '+fmt(inc);
+
   $('fRev').textContent=fmt(inc);$('fExp').textContent=fmt(exp);$('fNet').textContent=fmt(inc-exp);
 }
 async function editTxn(id){
