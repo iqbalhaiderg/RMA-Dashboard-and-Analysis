@@ -79,6 +79,9 @@ table{width:100%;border-collapse:collapse;font-size:12.5px}
 th{text-align:left;color:var(--mut);padding:7px 6px;border-bottom:1.5px solid var(--border);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.2px}
 td{padding:8px 6px;border-bottom:1px solid var(--border)}
 .r{text-align:right}
+thead th{position:sticky;top:0;background:var(--card2);z-index:1}
+th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+th.sortable:hover{color:var(--txt)}
 .kpi3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px}
 .kpi3 .card{margin:0;text-align:center}.kpi3 .v{font-size:18px;font-weight:800}.kpi3 .l{font-size:10.5px;color:var(--mut);font-weight:600}
 @media (min-width:760px){
@@ -192,11 +195,37 @@ header>div{display:flex;align-items:center;gap:8px}
       <button class="btn" onclick="saveTxn()">Save Entry</button>
     </div>
     <div class="card"><h3>💵 Income Details (reconciliation)</h3>
-      <div class="mini" style="margin-bottom:8px">Every confirmed booking payment and manual income entry in the selected range, with client name, phone, and discount for cross-checking against actual receipts.</div>
-      <div class="mini" id="finIncomeSum" style="margin-bottom:8px;font-weight:700"></div>
-      <div style="max-height:340px;overflow:auto"><table id="finIncomeTable"></table></div>
+      <div class="mini" style="margin-bottom:8px">Every confirmed booking payment and manual income entry in the selected range, with client name, phone, and discount for cross-checking against actual receipts. Click a column header to sort.</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+        <div class="mini" id="finIncomeSum" style="font-weight:700"></div>
+        <button class="btn ghost" style="margin:0;padding:7px 12px;font-size:12px" onclick="exportIncomeCSV()">⬇ Export CSV</button>
+      </div>
+      <div style="max-height:340px;overflow:auto">
+        <table id="finIncomeTable">
+          <thead><tr>
+            <th class="sortable" data-key="date" onclick="sortIncome('date')">Date</th>
+            <th class="sortable" data-key="name" onclick="sortIncome('name')">Client</th>
+            <th class="sortable" data-key="phone" onclick="sortIncome('phone')">Phone</th>
+            <th class="sortable" data-key="detail" onclick="sortIncome('detail')">Slot</th>
+            <th class="sortable r" data-key="discount" onclick="sortIncome('discount')">Discount</th>
+            <th class="sortable r" data-key="amount" onclick="sortIncome('amount')">Paid</th>
+            <th class="sortable" data-key="method" onclick="sortIncome('method')">Method</th>
+          </tr></thead>
+          <tbody id="finIncomeBody"></tbody>
+        </table>
+      </div>
     </div>
-    <div class="card"><h3>📒 Recent Manual Entries</h3><div style="max-height:300px;overflow:auto"><table id="tTable"></table></div></div>
+    <div class="card"><h3>📒 Recent Manual Entries</h3>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+        <button class="btn ghost" style="margin:0;padding:7px 12px;font-size:12px" onclick="exportManualCSV()">⬇ Export CSV</button>
+      </div>
+      <div style="max-height:300px;overflow:auto">
+        <table id="tTable">
+          <thead><tr><th>Date</th><th>Type</th><th>Head</th><th>Details</th><th class="r">Amount</th><th></th></tr></thead>
+          <tbody id="tTableBody"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 <div class="pane" id="pSet">
     <div class="card"><h3>💰 Slot Categories &amp; Pricing</h3>
@@ -606,6 +635,9 @@ async function saveTxn(){
   $('tAmt').value='';$('tDet').value=''; toast('Entry saved ✅'); loadTxns();
 }
 let TXCACHE={};
+let FIN_INCOME_ROWS=[];
+let FIN_MANUAL_ROWS=[];
+let FIN_SORT={key:'date',dir:-1};
 function finRange(){
   const m=todayStr().slice(0,7);
   const lastDay=new Date(+m.slice(0,4), +m.slice(5,7), 0).getDate();
@@ -613,14 +645,68 @@ function finRange(){
   if(!$('finTo').value) $('finTo').value=m+'-'+String(lastDay).padStart(2,'0');
   return {from:$('finFrom').value, to:$('finTo').value};
 }
+function sortRows(rows,key,dir){
+  const numKeys=['discount','amount'];
+  return rows.slice().sort((a,b)=>{
+    let av=a[key],bv=b[key];
+    if(numKeys.includes(key)){ av=+av||0; bv=+bv||0; return dir*(av-bv); }
+    av=(av||'').toString(); bv=(bv||'').toString();
+    return dir*av.localeCompare(bv);
+  });
+}
+function sortIncome(key){
+  if(FIN_SORT.key===key) FIN_SORT.dir*=-1; else { FIN_SORT.key=key; FIN_SORT.dir=(key==='date')?-1:1; }
+  renderIncomeTable();
+}
+function updateSortArrows(){
+  document.querySelectorAll('#finIncomeTable thead th[data-key]').forEach(th=>{
+    const k=th.getAttribute('data-key');
+    const base=th.textContent.replace(/ [▲▼]$/,'');
+    th.textContent=base+(k===FIN_SORT.key?(FIN_SORT.dir===1?' ▲':' ▼'):'');
+  });
+}
+function renderIncomeTable(){
+  const sorted=sortRows(FIN_INCOME_ROWS,FIN_SORT.key,FIN_SORT.dir);
+  let irows='';
+  sorted.forEach(r=>{ irows+=`<tr><td>${r.date}</td><td>${r.name}</td><td>${r.phone}</td><td>${r.detail}</td><td class="r">${r.discount?fmt(r.discount):'—'}</td><td class="r">${fmt(r.amount)}</td><td>${r.method}</td></tr>`; });
+  if(!sorted.length) irows='<tr><td colspan="7" class="mini">No income entries in this range.</td></tr>';
+  $('finIncomeBody').innerHTML=irows;
+  updateSortArrows();
+}
+function csvEscape(v){
+  v=(v===undefined||v===null)?'':String(v);
+  if(/[",\n]/.test(v)) v='"'+v.replace(/"/g,'""')+'"';
+  return v;
+}
+function downloadCSV(filename,rows2d){
+  const csv=rows2d.map(r=>r.map(csvEscape).join(',')).join('\r\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=filename;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function exportIncomeCSV(){
+  const {from,to}=finRange();
+  const sorted=sortRows(FIN_INCOME_ROWS,FIN_SORT.key,FIN_SORT.dir);
+  const rows=[['Date','Client','Phone','Slot','Discount','Paid','Method']];
+  sorted.forEach(r=>rows.push([r.date,r.name,r.phone,r.detail,r.discount||0,r.amount,r.method]));
+  downloadCSV('income_'+from+'_to_'+to+'.csv',rows);
+}
+function exportManualCSV(){
+  const rows=[['Date','Type','Head','Details','Amount']];
+  FIN_MANUAL_ROWS.forEach(t=>rows.push([t.date,t.type,t.cat,t.details||'',t.amount]));
+  downloadCSV('manual_entries_'+todayStr()+'.csv',rows);
+}
 async function loadTxns(){
   const {from,to}=finRange();
   const snap=await db.collection('transactions').orderBy('created','desc').limit(40).get();
-  TXCACHE={};
-  let rows='<tr><th>Date</th><th>Type</th><th>Head</th><th>Details</th><th class="r">Amount</th><th></th></tr>',exp=0,inc=0;
-  snap.forEach(d=>{const t=d.data(); TXCACHE[d.id]=t;
+  TXCACHE={}; FIN_MANUAL_ROWS=[];
+  let rows='',exp=0,inc=0;
+  snap.forEach(d=>{const t=d.data(); TXCACHE[d.id]=t; FIN_MANUAL_ROWS.push(t);
     rows+=`<tr><td>${t.date}</td><td>${t.type==='Income'?'🟢':'🔴'}</td><td>${t.cat}</td><td>${t.details||''}</td><td class="r">${fmt(t.amount)}</td><td><button class="btn ghost" style="margin:0;padding:4px 8px;font-size:11px" onclick="editTxn('${d.id}')">✎</button> <button class="btn danger" style="margin:0;padding:4px 8px;font-size:11px" onclick="deleteTxn('${d.id}')">✕</button></td></tr>`;});
-  $('tTable').innerHTML=rows;
+  $('tTableBody').innerHTML=rows;
 
   const incRows=[];
   const ms=await db.collection('transactions').where('date','>=',from).where('date','<=',to).get();
@@ -635,12 +721,9 @@ async function loadTxns(){
       incRows.push({date:b.date,name:b.name||b.client||'—',phone:b.phone||'',detail:b.slot||'',discount:+b.discount||0,amount:+b.paid||0,method:b.method||'—'});
     }
   });
-  incRows.sort((a,c)=>a.date<c.date?1:(a.date>c.date?-1:0));
-  let irows='<tr><th>Date</th><th>Client</th><th>Phone</th><th>Slot</th><th class="r">Discount</th><th class="r">Paid</th><th>Method</th></tr>';
-  incRows.forEach(r=>{ irows+=`<tr><td>${r.date}</td><td>${r.name}</td><td>${r.phone}</td><td>${r.detail}</td><td class="r">${r.discount?fmt(r.discount):'—'}</td><td class="r">${fmt(r.amount)}</td><td>${r.method}</td></tr>`; });
-  if(!incRows.length) irows+='<tr><td colspan="7" class="mini">No income entries in this range.</td></tr>';
-  $('finIncomeTable').innerHTML=irows;
-  $('finIncomeSum').textContent=incRows.length+' entrie(s) from '+from+' to '+to+' · Total '+fmt(inc);
+  FIN_INCOME_ROWS=incRows;
+  renderIncomeTable();
+  $('finIncomeSum').textContent=FIN_INCOME_ROWS.length+' entrie(s) from '+from+' to '+to+' · Total '+fmt(inc);
 
   $('fRev').textContent=fmt(inc);$('fExp').textContent=fmt(exp);$('fNet').textContent=fmt(inc-exp);
 }
