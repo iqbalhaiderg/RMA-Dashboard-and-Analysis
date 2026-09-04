@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Royal Multisport Arena — Book Your Slot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -11,57 +14,108 @@
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-6G1WD314X7"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-6G1WD314X7');</script>
 <style>
-:root{--bg:#0b1220;--card:#111b2e;--border:#1e2a44;--txt:#e6edf7;--mut:#8b9bb8;--grn:#22c55e;--amb:#f59e0b;--red:#ef4444}
+:root{
+  --navy:#0b1220; --navy2:#101b30;
+  --bg:#f5f6fa; --card:#ffffff; --card2:#f0f2f7;
+  --border:#e6e8f0;
+  --txt:#12172a; --mut:#6b7387; --mut2:#9aa1b5;
+  --grn:#0e9f6e; --grn-dk:#0a7a55; --grn-bg:#e6f7f0;
+  --amb:#f59e0b; --amb-bg:#fef3e0;
+  --red:#ef4444; --red-bg:#fde9e9;
+  --shadow:0 1px 2px rgba(16,22,45,.04),0 10px 24px -12px rgba(16,22,45,.12);
+  --shadow-lg:0 20px 40px -16px rgba(16,22,45,.28);
+}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,'Segoe UI',sans-serif;padding-bottom:40px}
-header{position:relative;background:linear-gradient(180deg,rgba(11,18,32,.55),rgba(11,18,32,.93) 75%,var(--bg) 100%),url('https://images.squarespace-cdn.com/content/6a89ec1760403d36a489e15a/fcb359b0-5cac-4aae-87bf-0f649eb0ce34/rma-hero-action.jpg?format=1500w') center 35%/cover no-repeat;padding:24px 16px 18px;border-bottom:1px solid var(--border)}
-.hdrow{display:flex;align-items:center;gap:10px;margin-bottom:6px}
-.logo{width:42px;height:42px;border-radius:50%;object-fit:cover;border:2px solid var(--grn);flex:0 0 auto;box-shadow:0 2px 8px rgba(0,0,0,.5)}
-h1{font-size:19px} h1 span{color:var(--grn)}
-.sub{color:var(--mut);font-size:12px;margin-top:4px}
-main{max-width:520px;margin:0 auto;padding:14px}
-.dates{display:flex;gap:8px;overflow-x:auto;padding:4px 0 10px;-webkit-overflow-scrolling:touch}
-.dch{flex:0 0 auto;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:8px 12px;text-align:center;cursor:pointer;min-width:62px}
-.dch.on{background:var(--grn);color:#04140a;border-color:var(--grn)}
-.dch .d1{font-size:11px;opacity:.8}.dch .d2{font-size:16px;font-weight:700}
-.dch.fri .d1{color:var(--amb)}.dch.on .d1{color:inherit}
-.slots{display:grid;gap:8px;margin-top:6px}
-.slot{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center}
-.slot .t{font-size:14px;font-weight:600}.slot .p{font-size:12px;color:var(--mut);margin-top:2px}
-.badge{font-size:11px;font-weight:700;padding:5px 12px;border-radius:14px}
-.b-av{background:#123524;color:var(--grn);cursor:pointer;border:1px solid #1f5c3b}
-.b-pen{background:#3a2a08;color:var(--amb)}
-.b-bk{background:#2a1215;color:#f87171}
-.b-bl{background:#222;color:#777}
-.sheet{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:flex-end;z-index:10}
+body{background:var(--bg);color:var(--txt);font-family:'Inter',system-ui,-apple-system,sans-serif;padding-bottom:40px;-webkit-font-smoothing:antialiased}
+h1,h3,.dch .d2,.btn,.badge,.form h3,.tab2,.seg-btn,.ck{font-family:'Plus Jakarta Sans',system-ui,sans-serif}
+
+header{position:relative;background:linear-gradient(155deg,rgba(11,18,32,.82),rgba(11,18,32,.94) 70%,var(--navy) 100%),url('https://images.squarespace-cdn.com/content/6a89ec1760403d36a489e15a/fcb359b0-5cac-4aae-87bf-0f649eb0ce34/rma-hero-action.jpg?format=1500w') center 35%/cover no-repeat;padding:20px 18px 24px;border-radius:0 0 26px 26px}
+header::after{content:'';position:absolute;right:-30px;top:-50px;width:160px;height:160px;border-radius:50%;background:radial-gradient(circle,rgba(14,159,110,.3),transparent 70%);pointer-events:none}
+.hdrow{display:flex;align-items:center;gap:10px;margin-bottom:8px;position:relative;z-index:1}
+.logo{width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid var(--grn);flex:0 0 auto;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+h1{font-size:18.5px;font-weight:800;color:#fff}
+h1 span{color:#5eead4}
+.hicon{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;flex:0 0 auto;margin-left:auto}
+.sub{color:#c8d0e2;font-size:12px;margin-top:4px;position:relative;z-index:1;line-height:1.6}
+
+main{max-width:520px;margin:0 auto;padding:14px 16px}
+
+.seg{display:flex;background:var(--card2);border-radius:14px;padding:4px;gap:4px;margin-bottom:12px}
+.seg-btn{flex:1;text-align:center;padding:9px 0;border-radius:11px;font-size:12.5px;font-weight:700;color:var(--mut);cursor:pointer;transition:background .15s,color .15s}
+.seg-btn.on{background:var(--card);color:var(--navy);box-shadow:var(--shadow)}
+
+.dates{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 8px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.dates::-webkit-scrollbar{display:none}
+.dch{flex:0 0 auto;background:var(--card);border:1.5px solid var(--border);border-radius:14px;padding:9px 13px;text-align:center;cursor:pointer;min-width:60px;box-shadow:var(--shadow);transition:transform .12s,background .12s}
+.dch:active{transform:scale(.96)}
+.dch.on{background:var(--navy);border-color:var(--navy)}
+.dch .d1{font-size:10.5px;opacity:.65;font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.dch .d2{font-size:17px;font-weight:800;margin:2px 0}
+.dch.fri .d1{color:var(--grn-dk)}
+.dch.on .d1{opacity:.75;color:#c9f5e4}
+.dch.on .d2{color:#fff}
+
+.calwrap{display:none;background:var(--card);border:1px solid var(--border);border-radius:20px;box-shadow:var(--shadow);padding:16px;margin-bottom:12px}
+.calwrap.on{display:block}
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.cal-head b{font-size:14.5px;font-weight:800;font-family:'Plus Jakarta Sans',sans-serif}
+.cal-nav{display:flex;gap:6px}
+.cal-nav button{width:30px;height:30px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--txt);font-size:14px;cursor:pointer}
+.cal-dow{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:10.5px;color:var(--mut2);font-weight:700;margin-bottom:6px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:10px;font-size:13px;font-weight:600;color:var(--txt);cursor:pointer;position:relative}
+.cal-cell.mut{visibility:hidden;pointer-events:none}
+.cal-cell.disabled{color:var(--mut2);pointer-events:none;opacity:.4}
+.cal-cell.today::after{content:'';position:absolute;bottom:4px;width:4px;height:4px;border-radius:50%;background:var(--grn)}
+.cal-cell.on{background:var(--navy);color:#fff}
+.cal-cell.on.today::after{background:#5eead4}
+.cal-cell:not(.mut):not(.disabled):hover{background:var(--card2)}
+
+.slots{display:grid;gap:9px;margin-top:4px}
+.slot{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:13px 15px;display:flex;justify-content:space-between;align-items:center;box-shadow:var(--shadow)}
+.slot .t{font-size:14px;font-weight:700}
+.slot .p{font-size:12px;color:var(--mut);margin-top:3px}
+
+.badge{font-size:11px;font-weight:700;padding:8px 13px;border-radius:12px;white-space:nowrap}
+.b-av{background:var(--grn);color:#fff;cursor:pointer;box-shadow:0 6px 14px -6px rgba(14,159,110,.55)}
+.b-av:active{transform:scale(.96)}
+.b-pen{background:var(--amb-bg);color:#b45309}
+.b-bk{background:var(--red-bg);color:#c0392b}
+.b-bl{background:var(--card2);color:var(--mut2)}
+
+.sheet{position:fixed;inset:0;background:rgba(11,18,32,.55);backdrop-filter:blur(2px);display:none;align-items:flex-end;z-index:10}
 .sheet.on{display:flex}
-.form{background:var(--card);border-radius:18px 18px 0 0;padding:20px 18px 30px;width:100%;max-width:520px;margin:0 auto}
-.form h3{font-size:16px;margin-bottom:4px}
-.form .fp{color:var(--mut);font-size:12.5px;margin-bottom:14px}
-label{font-size:12px;color:var(--mut);display:block;margin:10px 0 4px}
-input,select{width:100%;background:#0e1626;border:1px solid var(--border);color:var(--txt);border-radius:10px;padding:12px;font-size:15px}
-.btn{width:100%;background:var(--grn);color:#04140a;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:700;margin-top:16px;cursor:pointer}
-.btn.sec{background:transparent;color:var(--mut);border:1px solid var(--border);margin-top:8px}
-.note{background:#0e1626;border:1px dashed var(--border);border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--mut);margin-top:12px;line-height:1.5}
-.note b{color:var(--amb)}
+.form{background:var(--card);border-radius:24px 24px 0 0;padding:10px 18px 28px;width:100%;max-width:520px;margin:0 auto;box-shadow:var(--shadow-lg);max-height:88vh;overflow-y:auto}
+.form h3{font-size:17px;font-weight:800;margin-bottom:4px}
+.form .fp{color:var(--mut);font-size:12.5px;margin-bottom:14px;font-weight:500}
+label{font-size:11.5px;color:var(--mut);font-weight:700;display:block;margin:12px 0 6px;text-transform:uppercase;letter-spacing:.3px}
+input,select{width:100%;background:var(--card2);border:1.5px solid transparent;color:var(--txt);border-radius:12px;padding:13px 14px;font-size:15px;font-family:'Inter',sans-serif}
+input:focus,select:focus{outline:none;border-color:var(--grn);background:var(--card)}
+.btn{width:100%;background:var(--grn);color:#fff;border:none;border-radius:14px;padding:15px;font-size:15px;font-weight:700;margin-top:16px;cursor:pointer;box-shadow:0 10px 20px -8px rgba(14,159,110,.5)}
+.btn:active{transform:scale(.98)}
+.btn.sec{background:transparent;color:var(--mut);border:1.5px solid var(--border);box-shadow:none;margin-top:8px}
+.note{background:var(--grn-bg);border:1px dashed #a7e8cf;border-radius:14px;padding:12px 14px;font-size:12.5px;color:#0a5c40;margin-top:12px;line-height:1.6}
+.note b{color:var(--grn-dk)}
+
 .mybk{margin-top:22px}
 .mybk h3{font-size:14px;margin-bottom:8px}
-.bkitem{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
-.toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#123524;color:var(--grn);border:1px solid #1f5c3b;padding:10px 18px;border-radius:12px;font-size:13.5px;z-index:20;display:none;max-width:92%}
-footer{text-align:center;color:var(--mut);font-size:11.5px;margin-top:30px;line-height:1.6}
-.err{color:var(--red);font-size:12.5px;margin-top:8px;display:none}
+.bkitem{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px 12px;font-size:13px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;box-shadow:var(--shadow)}
 
-.hicon{width:34px;height:34px;border-radius:50%;background:#123524;color:var(--grn);border:1px solid #1f5c3b;display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;flex:0 0 auto;margin-left:auto}
+.toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 18px;border-radius:14px;font-size:13.5px;font-weight:600;z-index:20;display:none;max-width:92%;box-shadow:var(--shadow-lg)}
+
+footer{text-align:center;color:var(--mut2);font-size:11.5px;margin-top:28px;line-height:1.6}
+.err{color:var(--red);font-size:12.5px;margin-top:8px;display:none;font-weight:600}
+
 .ckwrap{text-align:center;padding:6px 0 4px}
-.ck{width:54px;height:54px;border-radius:50%;background:var(--grn);color:#04140a;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px;font-weight:700}
+.ck{width:54px;height:54px;border-radius:50%;background:var(--grn);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px;font-weight:700}
 .ckwrap h3{font-size:18px;margin-bottom:4px}
 .sumrow{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13.5px}
 .sumrow:last-child{border-bottom:none}
 .sumrow span:first-child{color:var(--mut)}
 .tabs2{display:flex;gap:8px;margin:12px 0}
-.tab2{flex:1;text-align:center;padding:9px;border-radius:10px;border:1px solid var(--border);background:#0e1626;color:var(--mut);font-size:13px;font-weight:600;cursor:pointer}
-.tab2.on{background:var(--grn);color:#04140a;border-color:var(--grn)}
-.bkitem2{background:#0e1626;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.tab2{flex:1;text-align:center;padding:9px;border-radius:11px;border:1px solid var(--border);background:var(--card2);color:var(--mut);font-size:13px;font-weight:700;cursor:pointer}
+.tab2.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.bkitem2{background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:8px}
 .bkitem2 .r1{display:flex;justify-content:space-between;align-items:center;font-size:13.5px;font-weight:600}
 .bkitem2 .r2{color:var(--mut);font-size:12px;margin-top:3px}
 </style>
@@ -69,13 +123,27 @@ footer{text-align:center;color:var(--mut);font-size:11.5px;margin-top:30px;line-
 <body>
 <header>
   <div class="hdrow"><img class="logo" src="https://images.squarespace-cdn.com/content/6a89ec1760403d36a489e15a/f07fd7f4-fb71-4da0-861c-1c2f344bbd3e/rma-logo-circle.jpg?format=100w" alt="Royal Multisport Arena"><h1>Royal <span>Multisport Arena</span></h1><div class="hicon" onclick="openMyBookings()" title="My Bookings">📋</div></div>
-  <div class="sub">Book your slot · Premium turf · Shamlapur Western City, Bhakurta, Dhaka · ☎ <a style="color:#22c55e" href="tel:+8801886542122">01886-542122</a></div>
+  <div class="sub">Book your slot · Premium turf · Shamlapur Western City, Bhakurta, Dhaka · ☎ <a style="color:#5eead4" href="tel:+8801886542122">01886-542122</a></div>
 </header>
 <main>
+  <div class="seg">
+    <div class="seg-btn on" id="segStrip">Quick Pick</div>
+    <div class="seg-btn" id="segCal">Calendar</div>
+  </div>
+
   <div class="dates" id="dates"></div>
+
+  <div class="calwrap" id="calwrap">
+    <div class="cal-head"><b id="calMonthLabel"></b>
+      <div class="cal-nav"><button id="calPrev" type="button">‹</button><button id="calNext" type="button">›</button></div>
+    </div>
+    <div class="cal-dow"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+    <div class="cal-grid" id="calGrid"></div>
+  </div>
+
   <div class="slots" id="slots"><div style="color:var(--mut);font-size:13px;padding:20px;text-align:center">Loading slots…</div></div>
 
-  <footer>Pending bookings are confirmed by our team after advance verification.<br>Need help? Call <a style="color:#22c55e" href="tel:+8801886542122">01886-542122</a></footer>
+  <footer>Pending bookings are confirmed by our team after advance verification.<br>Need help? Call <a style="color:var(--grn-dk);font-weight:600;text-decoration:none" href="tel:+8801886542122">01886-542122</a></footer>
 </main>
 
 <div class="sheet" id="sheet">
@@ -130,8 +198,9 @@ const db = firebase.firestore();
 firebase.auth().signInAnonymously().catch(e=>console.error(e));
 
 let selDate = null, selSlot = null, unsub = null, SLOTCFG = null;
+let calViewMonth = new Date();
 const $ = id => document.getElementById(id);
-const fmt = n => '৳'+n.toLocaleString('en-IN');
+const fmt = n => '৳'+(+n).toLocaleString('en-IN');
 function shortRef(id){let h=0;for(let i=0;i<id.length;i++){h=(h*31+id.charCodeAt(i))>>>0;}return 'RMA-'+h.toString(36).toUpperCase().slice(-6);}
 const todayStr = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
 
@@ -163,6 +232,39 @@ function buildDates(){
     if(i===0) selDate=ds;
   }
 }
+
+function maxBookDate(){
+  const d=new Date(); d.setDate(d.getDate()+VENUE.bookAheadDays-1);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function renderCalendar(){
+  const y=calViewMonth.getFullYear(), m=calViewMonth.getMonth();
+  $('calMonthLabel').textContent=calViewMonth.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  const grid=$('calGrid'); grid.innerHTML='';
+  const first=new Date(y,m,1);
+  const startPad=first.getDay();
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  const minD=todayStr(), maxD=maxBookDate();
+  for(let i=0;i<startPad;i++){ const c=document.createElement('div'); c.className='cal-cell mut'; grid.appendChild(c); }
+  for(let d=1; d<=daysInMonth; d++){
+    const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const c=document.createElement('div');
+    let cls='cal-cell';
+    if(ds<minD||ds>maxD) cls+=' disabled';
+    if(ds===todayStr()) cls+=' today';
+    if(ds===selDate) cls+=' on';
+    c.className=cls;
+    c.textContent=d;
+    if(!(ds<minD||ds>maxD)){
+      c.onclick=()=>{ loadDay(ds); renderCalendar(); };
+    }
+    grid.appendChild(c);
+  }
+}
+$('calPrev').onclick=()=>{ calViewMonth.setMonth(calViewMonth.getMonth()-1); renderCalendar(); };
+$('calNext').onclick=()=>{ calViewMonth.setMonth(calViewMonth.getMonth()+1); renderCalendar(); };
+$('segStrip').onclick=()=>{ $('segStrip').classList.add('on'); $('segCal').classList.remove('on'); $('dates').style.display='flex'; $('calwrap').classList.remove('on'); };
+$('segCal').onclick=()=>{ $('segCal').classList.add('on'); $('segStrip').classList.remove('on'); $('dates').style.display='none'; $('calwrap').classList.add('on'); calViewMonth=new Date(selDate+'T00:00:00'); renderCalendar(); };
 
 function loadDay(ds){
   selDate=ds;
