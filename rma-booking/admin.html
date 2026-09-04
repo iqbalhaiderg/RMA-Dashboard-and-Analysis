@@ -72,6 +72,23 @@ td{padding:8px 6px;border-bottom:1px solid var(--border)}
   header{padding:16px 28px}
   .row>*{min-width:0}
 }
+header{flex-wrap:wrap;row-gap:6px}
+header>div{display:flex;align-items:center;gap:8px}
+#who{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle}
+.tabs{-webkit-mask-image:linear-gradient(to right,#000 92%,transparent 100%);mask-image:linear-gradient(to right,#000 92%,transparent 100%)}
+@media (max-width:480px){
+  main{padding:10px}
+  h1{font-size:14px}
+  #who{max-width:96px;font-size:10px}
+  header .btn.ghost{padding:5px 9px;font-size:11px;margin:0}
+  .tab{padding:8px 12px;font-size:12px}
+  .card{padding:12px}
+  .kpi3{grid-template-columns:1fr 1fr;gap:6px}
+  .kpi3 .v{font-size:15px}
+  .bk{padding:9px 10px;font-size:12px}
+  .bk .mini{font-size:10.5px;line-height:1.5}
+  .grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
+}
 </style>
 </head>
 <body>
