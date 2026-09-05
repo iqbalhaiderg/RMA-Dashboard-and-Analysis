@@ -432,6 +432,36 @@ let selDate = null, selSlot = null, unsub = null, SLOTCFG = null;
 let calViewMonth = new Date();
 let IS_MEMBER = false; let MULTI_MODE = false; let MULTI_SET = new Set(); let LAST_TAKEN = {};
 function bookWindowDays(){ return IS_MEMBER ? 90 : VENUE.bookAheadDays; }
+let PROMOS = [];
+function loadPromos(){
+  db.collection('promotions').where('active','==',true).onSnapshot(snap=>{
+    PROMOS = []; snap.forEach(d=>PROMOS.push({id:d.id,...d.data()}));
+    renderSlots(selDate, LAST_TAKEN);
+  }, e=>console.error('promos', e));
+}
+function activePromoFor(dateStr, slotT){
+  const d = new Date(dateStr+'T00:00:00');
+  const dow = d.getDay();
+  for(const p of PROMOS){
+    if(p.startDate && dateStr < p.startDate) continue;
+    if(p.endDate && dateStr > p.endDate) continue;
+    if(p.days && p.days.length && !p.days.includes(dow)) continue;
+    if(p.slots && p.slots.length && !p.slots.includes(slotT)) continue;
+    return p;
+  }
+  return null;
+}
+function discountedPrice(base, promo){
+  if(!promo) return base;
+  if(promo.type==='percent') return Math.max(0, Math.round(base * (1 - promo.value/100)));
+  return Math.max(0, base - promo.value);
+}
+function finalPrice(dateStr, slotT){
+  const base = slotPrice(dateStr, slotT);
+  const promo = activePromoFor(dateStr, slotT);
+  return (promo && IS_MEMBER) ? discountedPrice(base, promo) : base;
+}
+
 const $ = id => document.getElementById(id);
 const fmt = n => '৳'+(+n).toLocaleString('en-IN');
 function shortRef(id){let h=0;for(let i=0;i<id.length;i++){h=(h*31+id.charCodeAt(i))>>>0;}return 'RMA-'+h.toString(36).toUpperCase().slice(-6);}
@@ -520,18 +550,32 @@ function renderSlots(ds,taken){
     const st=taken[s.t];
     const [h,m]=s.t.split(':').map(Number);
     const past = isToday && (h*60+m) < nowMin;
-    const price=slotPrice(ds,s.t);
-    let badge;
-    if(past) badge='<span class="badge b-bl">Past</span>';
-    else if(st==='confirmed'||st==='blocked') badge='<span class="badge b-bk">Booked</span>';
-    else if(st==='pending') badge='<span class="badge b-pen">Pending</span>';
-    else if(MULTI_MODE){
+    const base=slotPrice(ds,s.t);
+    const promo=activePromoFor(ds,s.t);
+    const price=(promo && IS_MEMBER) ? discountedPrice(base,promo) : base;
+    let badge, priceLine;
+    if(past){
+      badge='<span class="badge b-bl">Past</span>'; priceLine=fmt(base)+' · full field 90 min';
+    } else if(st==='confirmed'||st==='blocked'){
+      badge='<span class="badge b-bk">Booked</span>'; priceLine=fmt(base)+' · full field 90 min';
+    } else if(st==='pending'){
+      badge='<span class="badge b-pen">Pending</span>'; priceLine=fmt(base)+' · full field 90 min';
+    } else if(MULTI_MODE){
       const sel = MULTI_SET.has(s.t);
       badge = '<span class="badge b-av" style="'+(sel?'background:var(--grn-dk);color:#fff':'')+'" onclick="toggleSlotSel(\''+s.t+'\')">'+(sel?'✓ Selected':'Select '+fmt(price))+'</span>';
+      priceLine = (promo && IS_MEMBER) ? ('<s style="opacity:.55">'+fmt(base)+'</s> '+fmt(price)+' · 🎁 member price · full field 90 min') : (fmt(price)+' · full field 90 min');
+    } else {
+      badge = '<span class="badge b-av" onclick="openSheet(\''+s.t+'\')">Book '+fmt(price)+'</span>';
+      if(promo && IS_MEMBER){
+        priceLine = '<s style="opacity:.55">'+fmt(base)+'</s> '+fmt(price)+' · 🎁 member price · full field 90 min';
+      } else if(promo && !IS_MEMBER){
+        priceLine = fmt(base)+' · full field 90 min · <a href="javascript:void(0)" onclick="openAuthSheet()" style="color:var(--grn-dk);font-weight:700">Sign in to save '+fmt(base-discountedPrice(base,promo))+'</a>';
+      } else {
+        priceLine = fmt(price)+' · full field 90 min';
+      }
     }
-    else badge=`<span class="badge b-av" onclick="openSheet('${s.t}')">Book ${fmt(price)}</span>`;
     const div=document.createElement('div'); div.className='slot';
-    div.innerHTML=`<div><div class="t">${s.label}${s.bonus?' <span style="color:var(--amb);font-size:10px">★ EARLY BIRD</span>':''}</div><div class="p">${fmt(price)} · full field 90 min</div></div>${badge}`;
+    div.innerHTML = '<div><div class="t">'+s.label+(s.bonus?' <span style="color:var(--amb);font-size:10px">★ EARLY BIRD</span>':'')+'</div><div class="p">'+priceLine+'</div></div>'+badge;
     el.appendChild(div);
   });
 }
@@ -557,7 +601,7 @@ function renderMultiBar(){
 function openMultiSheet(){
   if(MULTI_SET.size===0) return;
   const arr=[...MULTI_SET].sort();
-  const total=arr.reduce((a,t)=>a+slotPrice(selDate,t),0);
+  const total=arr.reduce((a,t)=>a+finalPrice(selDate,t),0);
   $('fTitle').textContent = arr.length+' slots on '+new Date(selDate+'T00:00:00').toDateString();
   $('fSub').textContent = arr.map(t=>{const s=SLOTS.find(x=>x.t===t); return s?s.label:t;}).join(', ')+' · Total '+fmt(total);
   $('bkNum').textContent = VENUE.bkash;
@@ -570,7 +614,7 @@ function openSheet(slotT){
   selSlot=slotT;
   const s=SLOTS.find(x=>x.t===slotT);
   $('fTitle').textContent='Book '+s.label;
-  $('fSub').textContent=new Date(selDate+'T00:00:00').toDateString()+' · '+fmt(slotPrice(selDate,slotT));
+  $('fSub').textContent=new Date(selDate+'T00:00:00').toDateString()+' · '+fmt(finalPrice(selDate,slotT));
   $('bkNum').textContent=VENUE.bkash;
   $('fName').value=localStorage.getItem('rma_name')||'';
   $('fPhone').value=localStorage.getItem('rma_phone')||'';
@@ -592,9 +636,14 @@ $('fGo').onclick=async ()=>{
     const batch=db.batch();
     slotsArr.forEach(t=>{
       const id=selDate+'_'+t.replace(':','');
+      const base=slotPrice(selDate,t);
+      const promo=activePromoFor(selDate,t);
+      const finalP=(promo && IS_MEMBER)?discountedPrice(base,promo):base;
       batch.set(db.collection('bookings').doc(id),{
         date:selDate, slot:t, client, name, phone,
-        price:slotPrice(selDate,t), advance: trx?VENUE.advance:0, trxId:trx||null,
+        price:finalP, originalPrice:base,
+        promoId:(promo && IS_MEMBER)?promo.id:null, promoLabel:(promo && IS_MEMBER)?promo.label:null,
+        advance: trx?VENUE.advance:0, trxId:trx||null,
         status:'pending', source:'web',
         uid,
         created:firebase.firestore.FieldValue.serverTimestamp()
@@ -619,10 +668,15 @@ $('fGo').onclick=async ()=>{
     }
   } else {
     const id=selDate+'_'+selSlot.replace(':','');
+    const base=slotPrice(selDate,selSlot);
+    const promo=activePromoFor(selDate,selSlot);
+    const finalP=(promo && IS_MEMBER)?discountedPrice(base,promo):base;
     try{
       await db.collection('bookings').doc(id).set({
         date:selDate, slot:selSlot, client, name, phone,
-        price:slotPrice(selDate,selSlot), advance: trx?VENUE.advance:0, trxId:trx||null,
+        price:finalP, originalPrice:base,
+        promoId:(promo && IS_MEMBER)?promo.id:null, promoLabel:(promo && IS_MEMBER)?promo.label:null,
+        advance: trx?VENUE.advance:0, trxId:trx||null,
         status:'pending', source:'web',
         uid,
         created:firebase.firestore.FieldValue.serverTimestamp()
@@ -689,7 +743,7 @@ async function loadMyBookings(){
   }).join('');
 }
 
-buildDates(); loadSlotCfg(); loadDay(selDate);
+buildDates(); loadSlotCfg(); loadDay(selDate); loadPromos();
 </script>
 </body>
 </html>
