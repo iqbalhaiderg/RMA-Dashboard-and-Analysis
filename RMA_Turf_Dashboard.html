@@ -202,14 +202,37 @@ function render(){
   const profit = rev - expTot;
   const [pFrom,pTo] = periodRange();
   const nDays = daysIn(pFrom,pTo);
-  const occ = S.length/(nDays*11);
   const clients = new Set(S.map(s=>s.client));
-  const avg = S.length? S.reduce((a,s)=>a+s.paid,0)/S.length : 0;
+  const now2 = new Date();
+  const TODAY = `${now2.getFullYear()}-${String(now2.getMonth()+1).padStart(2,'0')}-${String(now2.getDate()).padStart(2,'0')}`;
+  const Scomp = S.filter(s=>s.date<=TODAY); // exclude future/not-yet-occurred bookings from realized-performance metrics
+  const occTo = pTo>TODAY?TODAY:pTo;
+  const occNDays = pFrom>occTo? 0 : daysIn(pFrom,occTo);
+  const occ = occNDays? Scomp.length/(occNDays*11) : 0;
+  const avg = Scomp.length? Scomp.reduce((a,s)=>a+s.paid,0)/Scomp.length : 0;
+  const avgCost = Scomp.length? expTot/Scomp.length : 0;
 
   // KPI deltas vs previous window
   const prev = prevPeriodSales();
   let dRev='';
   if(prev && prev.length){const pr=prev.reduce((a,s)=>a+s.paid,0);const g=(S.reduce((a,s)=>a+s.paid,0)-pr)/pr;dRev=`<span class="${g>=0?'up':'dn'}">${g>=0?'▲':'▼'} ${pct(Math.abs(g))}</span> vs prior period`;}
+
+  // Projected revenue (next 30 days): already-booked amount + historical daily-pattern top-up
+  const ymdLocal = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const dayAmt = {};
+  DATA.sales.forEach(s=>{ dayAmt[s.date] = (dayAmt[s.date]||0) + s.amount; });
+  const histStart = new Date(); histStart.setDate(histStart.getDate()-30);
+  const histStr = ymdLocal(histStart);
+  let histSum = 0;
+  DATA.sales.forEach(s=>{ if(s.date>=histStr && s.date<=TODAY) histSum += s.paid; });
+  const histDailyAvg = histSum/30;
+  let projRev = 0, projBooked = 0;
+  for(let i=1;i<=30;i++){
+    const d = new Date(); d.setDate(d.getDate()+i);
+    const booked = dayAmt[ymdLocal(d)]||0;
+    projBooked += booked;
+    projRev += Math.max(booked, histDailyAvg);
+  }
 
   document.getElementById('sub').textContent = `${pFrom} → ${pTo} · ${S.length.toLocaleString()} bookings · ${clients.size.toLocaleString()} unique clients`;
   document.getElementById('kpis').innerHTML = [
@@ -217,8 +240,10 @@ function render(){
     ['Total Expenses', fmt(expTot), `${pct(expTot/(rev||1))} of revenue`],
     ['Net Profit', `<span class="${profit>=0?'up':'dn'}">${fmt(profit)}</span>`, `margin ${pct(profit/(rev||1))}`],
     ['Bookings', S.length.toLocaleString(), `${(S.length/nDays).toFixed(1)} per day`],
-    ['Occupancy', pct(occ), 'of 11 daily slots'],
-    ['Avg. per Slot', fmt(avg), 'booking value'],
+    ['Occupancy', pct(occ), 'of 11 daily slots (completed days)'],
+    ['Avg. per Slot', fmt(avg), 'realized booking value'],
+    ['Avg. Slot Cost', fmt(avgCost), 'operating cost / completed booking'],
+    ['Projected Revenue', fmt(projRev), `next 30 days · ${fmt(projBooked)} already booked`],
   ].map(k=>`<div class="kpi"><div class="l">${k[0]}</div><div class="v">${k[1]}</div><div class="d">${k[2]}</div></div>`).join('');
 
   // Monthly chart (always full history for context)
@@ -315,8 +340,9 @@ function renderForecast(){
     const dow=new Date(s.date).getDay(); // 5=Fri,6=Sat
     const we=(dow===5||dow===6);
     const mins=slotMins(s.slot);
-    const eve=mins>=17*60; // 17:00 through 00:30 (slotMins wraps <06:00 to +24h)
-    const np=we?(eve?5000:3000):(eve?4500:2500);
+    const isLate=mins>=1440; // 00:30/02:00/03:30 (slotMins wraps <06:00 to +24h) — flat Late Night rate
+    const eve=!isLate && mins>=17*60; // 17:00 through 23:00
+    const np=isLate?4000:(we?(eve?5000:3000):(eve?4500:2500));
     oldSum+=s.paid;newSum+=np;
   });
   const uplift=oldSum?newSum/oldSum:1;
