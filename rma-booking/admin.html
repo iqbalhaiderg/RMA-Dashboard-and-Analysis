@@ -251,6 +251,13 @@ header>div{display:flex;align-items:center;gap:8px}
       <button class="btn" onclick="addPromo()">Add Discount</button>
       <div id="promoList" style="margin-top:12px"></div>
     </div>
+    <div class="card"><h3>🎉 Welcome Discount (First Booking)</h3>
+      <div class="mini" style="margin-bottom:8px">One-time discount for new member accounts on their very first booking. Applies automatically — takes priority over other member discounts.</div>
+      <div class="row"><div><input id="wLabel" placeholder="Label e.g. Welcome Discount"></div><div style="flex:0 0 100px"><select id="wType"><option value="percent">% off</option><option value="flat">৳ off</option></select></div><div style="flex:0 0 90px"><input id="wValue" type="number" placeholder="Value"></div></div>
+      <label class="mini" style="display:block;margin:8px 0"><input type="checkbox" id="wActive"> Active</label>
+      <button class="btn" onclick="saveWelcome()">Save Welcome Discount</button>
+      <div id="welcomeStatus" class="mini" style="margin-top:8px"></div>
+    </div>
     <div class="card"><h3>🏷 Income / Expense Heads</h3>
       <div class="row"><div><input id="hName" placeholder="New head name"></div><div style="flex:0 0 110px"><select id="hType"><option>Expense</option><option>Income</option></select></div></div>
       <button class="btn" onclick="addHead()">Add Head</button>
@@ -338,7 +345,7 @@ function init(){
   $('calDate').onchange=()=>renderCal();
     const abF=new Date(),abT=new Date(); abF.setDate(abF.getDate()-30); abT.setDate(abT.getDate()+60);
   $('abFrom').value=localDateStr(abF); $('abTo').value=localDateStr(abT);
-  watchRequests(); renderCal(); loadHeads(); loadTxns(); loadAdmins(); loadSlotCfg(); loadAllBookings(); initPromoForm(); loadPromos();
+  watchRequests(); renderCal(); loadHeads(); loadTxns(); loadAdmins(); loadSlotCfg(); loadAllBookings(); initPromoForm(); loadPromos(); loadWelcomeSettings();
 }
 
 // ---- Slot categories, pricing & availability ----
@@ -655,6 +662,29 @@ function loadPromos(){
 }
 function togglePromo(id,val){ db.collection('promotions').doc(id).update({active:val}); }
 function deletePromo(id){ if(confirm('Delete this discount?')) db.collection('promotions').doc(id).delete(); }
+function loadWelcomeSettings(){
+  db.collection('settings').doc('welcome').onSnapshot(d=>{
+    const w = d.exists ? d.data() : null;
+    if(w){
+      $('wLabel').value = w.label||'';
+      $('wType').value = w.type||'percent';
+      $('wValue').value = w.value||'';
+      $('wActive').checked = !!w.active;
+      $('welcomeStatus').textContent = w.active ? ('Active: '+w.label+' \u2014 '+(w.type==='percent'?w.value+'% off':fmt(w.value)+' off')) : 'Currently inactive.';
+    } else {
+      $('welcomeStatus').textContent = 'Not set up yet.';
+    }
+  });
+}
+async function saveWelcome(){
+  const label = $('wLabel').value.trim() || 'Welcome Discount';
+  const type = $('wType').value;
+  const value = +$('wValue').value;
+  const active = $('wActive').checked;
+  if(active && !value){ toast('Enter a discount value'); return; }
+  await db.collection('settings').doc('welcome').set({label,type,value,active}, {merge:true});
+  toast('Welcome discount saved ✅');
+}
 async function loadHeads(){
   const snap=await db.collection('heads').get();
   let heads=[];snap.forEach(d=>heads.push({id:d.id,...d.data()}));
