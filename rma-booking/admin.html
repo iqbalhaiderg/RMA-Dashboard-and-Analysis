@@ -240,6 +240,17 @@ header>div{display:flex;align-items:center;gap:8px}
       <div class="mini" style="margin-bottom:8px">Pick a category per slot for weekdays vs weekends (Fri/Sat), and switch a slot off if it's not being sold.</div>
       <div style="overflow-x:auto"><table id="slotAssignTable"></table></div>
     </div>
+    <div class="card"><h3>🎁 Member Discounts</h3>
+      <div class="mini" style="margin-bottom:8px">Special pricing for signed-in customers only. Leave days/slots unchecked to apply to all.</div>
+      <div class="row"><div><input id="pLabel" placeholder="Label e.g. Weekday Member Discount"></div><div style="flex:0 0 100px"><select id="pType"><option value="percent">% off</option><option value="flat">৳ off</option></select></div><div style="flex:0 0 90px"><input id="pValue" type="number" placeholder="Value"></div></div>
+      <div class="mini" style="margin:8px 0 4px">Days (blank = all days)</div>
+      <div id="pDays" style="margin-bottom:8px"></div>
+      <div class="mini" style="margin:8px 0 4px">Slots (blank = all slots)</div>
+      <select id="pSlots" multiple style="height:110px;width:100%;margin-bottom:8px"></select>
+      <div class="row"><div><label class="mini">Start date (optional)</label><input id="pStart" type="date"></div><div><label class="mini">End date (optional)</label><input id="pEnd" type="date"></div></div>
+      <button class="btn" onclick="addPromo()">Add Discount</button>
+      <div id="promoList" style="margin-top:12px"></div>
+    </div>
     <div class="card"><h3>🏷 Income / Expense Heads</h3>
       <div class="row"><div><input id="hName" placeholder="New head name"></div><div style="flex:0 0 110px"><select id="hType"><option>Expense</option><option>Income</option></select></div></div>
       <button class="btn" onclick="addHead()">Add Head</button>
@@ -327,7 +338,7 @@ function init(){
   $('calDate').onchange=()=>renderCal();
     const abF=new Date(),abT=new Date(); abF.setDate(abF.getDate()-30); abT.setDate(abT.getDate()+60);
   $('abFrom').value=localDateStr(abF); $('abTo').value=localDateStr(abT);
-  watchRequests(); renderCal(); loadHeads(); loadTxns(); loadAdmins(); loadSlotCfg(); loadAllBookings();
+  watchRequests(); renderCal(); loadHeads(); loadTxns(); loadAdmins(); loadSlotCfg(); loadAllBookings(); initPromoForm(); loadPromos();
 }
 
 // ---- Slot categories, pricing & availability ----
@@ -605,6 +616,45 @@ async function manualBook(){
 }
 
 // ---- Finance ----
+function initPromoForm(){
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  $('pDays').innerHTML = days.map((d,i)=>'<label class="mini" style="margin-right:10px"><input type="checkbox" class="pDayChk" value="'+i+'"> '+d+'</label>').join('');
+  $('pSlots').innerHTML = SLOTS.map(s=>'<option value="'+s.t+'">'+s.label+'</option>').join('');
+}
+async function addPromo(){
+  const label=$('pLabel').value.trim();
+  const type=$('pType').value;
+  const value=+$('pValue').value;
+  if(!label||!value){ toast('Enter a label and value'); return; }
+  const days=[...document.querySelectorAll('.pDayChk:checked')].map(c=>+c.value);
+  const slots=[...$('pSlots').selectedOptions].map(o=>o.value);
+  const startDate=$('pStart').value||null;
+  const endDate=$('pEnd').value||null;
+  await db.collection('promotions').add({
+    label,type,value,days,slots,memberOnly:true,active:true,startDate,endDate,
+    created:firebase.firestore.FieldValue.serverTimestamp()
+  });
+  $('pLabel').value=''; $('pValue').value=''; $('pStart').value=''; $('pEnd').value='';
+  document.querySelectorAll('.pDayChk').forEach(c=>c.checked=false);
+  $('pSlots').selectedIndex=-1;
+  toast('Discount added ✅');
+}
+function loadPromos(){
+  db.collection('promotions').onSnapshot(snap=>{
+    const promos=[]; snap.forEach(d=>promos.push({id:d.id,...d.data()}));
+    window.PROMOS=promos;
+    const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    $('promoList').innerHTML = promos.map(p=>{
+      const dayTxt = (p.days&&p.days.length)? p.days.map(d=>days[d]).join('/') : 'All days';
+      const slotTxt = (p.slots&&p.slots.length)? p.slots.map(t=>{const s=SLOTS.find(x=>x.t===t);return s?s.label:t;}).join(', ') : 'All slots';
+      const valTxt = p.type==='percent' ? p.value+'% off' : fmt(p.value)+' off';
+      const rangeTxt = (p.startDate||p.endDate) ? (' · '+(p.startDate||'…')+' to '+(p.endDate||'…')) : '';
+      return '<div class="card" style="padding:10px 12px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center"><b>'+p.label+'</b><label class="mini"><input type="checkbox" '+(p.active?'checked':'')+' onchange="togglePromo(\''+p.id+'\',this.checked)"> Active</label></div><div class="mini">'+valTxt+' · '+dayTxt+' · '+slotTxt+rangeTxt+'</div><button class="btn sec" style="width:auto;padding:4px 10px;margin-top:6px;font-size:12px" onclick="deletePromo(\''+p.id+'\')">Delete</button></div>';
+    }).join('') || '<div class="mini">No member discounts yet.</div>';
+  });
+}
+function togglePromo(id,val){ db.collection('promotions').doc(id).update({active:val}); }
+function deletePromo(id){ if(confirm('Delete this discount?')) db.collection('promotions').doc(id).delete(); }
 async function loadHeads(){
   const snap=await db.collection('heads').get();
   let heads=[];snap.forEach(d=>heads.push({id:d.id,...d.data()}));
