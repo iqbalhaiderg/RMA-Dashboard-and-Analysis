@@ -240,6 +240,10 @@ header>div{display:flex;align-items:center;gap:8px}
       <div class="mini" style="margin-bottom:8px">Pick a category per slot for weekdays vs weekends (Fri/Sat), and switch a slot off if it's not being sold.</div>
       <div style="overflow-x:auto"><table id="slotAssignTable"></table></div>
     </div>
+    <div class="card"><h3>👥 Members</h3>
+      <div style="font-size:28px;font-weight:800" id="memberCount">–</div>
+      <div class="mini">Signed-up member accounts (excludes guest bookings)</div>
+    </div>
     <div class="card"><h3>🎁 Member Discounts</h3>
       <div class="mini" style="margin-bottom:8px">Special pricing for signed-in customers only. Leave days/slots unchecked to apply to all.</div>
       <div class="row"><div><input id="pLabel" placeholder="Label e.g. Weekday Member Discount"></div><div style="flex:0 0 100px"><select id="pType"><option value="percent">% off</option><option value="flat">৳ off</option></select></div><div style="flex:0 0 90px"><input id="pValue" type="number" placeholder="Value"></div></div>
@@ -345,7 +349,7 @@ function init(){
   $('calDate').onchange=()=>renderCal();
     const abF=new Date(),abT=new Date(); abF.setDate(abF.getDate()-30); abT.setDate(abT.getDate()+60);
   $('abFrom').value=localDateStr(abF); $('abTo').value=localDateStr(abT);
-  watchRequests(); renderCal(); loadHeads(); loadTxns(); loadAdmins(); loadSlotCfg(); loadAllBookings(); initPromoForm(); loadPromos(); loadWelcomeSettings();
+  watchRequests(); renderCal(); loadHeads(); loadTxns(); loadAdmins(); loadSlotCfg(); loadAllBookings(); initPromoForm(); loadPromos(); loadWelcomeSettings(); loadMemberCount();
 }
 
 // ---- Slot categories, pricing & availability ----
@@ -684,6 +688,11 @@ async function saveWelcome(){
   if(active && !value){ toast('Enter a discount value'); return; }
   await db.collection('settings').doc('welcome').set({label,type,value,active}, {merge:true});
   toast('Welcome discount saved ✅');
+}
+function loadMemberCount(){
+  db.collection('clients').where('uid','!=',null).onSnapshot(snap=>{
+    $('memberCount').textContent = snap.size;
+  }, e=>console.error('memberCount', e));
 }
 async function loadHeads(){
   const snap=await db.collection('heads').get();
