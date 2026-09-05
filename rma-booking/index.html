@@ -54,6 +54,9 @@ h1{font-size:18.5px;font-weight:800;color:#fff}
 h1 span{color:#5eead4}
 .hicon{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;flex:0 0 auto;margin-left:auto}
 .sub{color:#c8d0e2;font-size:12px;margin-top:4px;position:relative;z-index:1;line-height:1.6}
+.authline{color:#c8d0e2;font-size:11.5px;margin-top:6px;position:relative;z-index:1}
+.authline a{color:#5eead4;font-weight:700;text-decoration:none}
+.authline b{color:#fff}
 
 main{max-width:520px;margin:0 auto;padding:14px 16px}
 
@@ -150,9 +153,9 @@ footer{text-align:center;color:var(--mut2);font-size:11.5px;margin-top:28px;line
 </head>
 <body>
 <header>
-  <div class="hdrow"><img class="logo" src="https://images.squarespace-cdn.com/content/6a89ec1760403d36a489e15a/f07fd7f4-fb71-4da0-861c-1c2f344bbd3e/rma-logo-circle.jpg?format=100w" alt="Royal Multisport Arena"><h1>Royal <span>Multisport Arena</span></h1><div class="hicon" onclick="openMyBookings()" title="My Bookings">📋</div></div>
+  <div class="hdrow"><img class="logo" src="https://images.squarespace-cdn.com/content/6a89ec1760403d36a489e15a/f07fd7f4-fb71-4da0-861c-1c2f344bbd3e/rma-logo-circle.jpg?format=100w" alt="Royal Multisport Arena"><h1>Royal <span>Multisport Arena</span></h1><div class="hicon" id="acctIcon" onclick="openAuthSheet()" title="Account">👤</div><div class="hicon" onclick="openMyBookings()" title="My Bookings">📋</div></div>
   <div class="sub">Book your slot · Premium turf · Shamlapur Western City, Bhakurta, Dhaka · ☎ <a style="color:#5eead4" href="tel:+8801886542122">01886-542122</a></div>
-</header>
+<div class="authline" id="authline">Repeat customer? <a href="javascript:void(0)" onclick="openAuthSheet()">Sign in with email</a> for member perks.</div></header>
 <main>
   <div class="seg">
     <div class="seg-btn on" id="segStrip">Quick Pick</div>
@@ -218,12 +221,84 @@ footer{text-align:center;color:var(--mut2);font-size:11.5px;margin-top:28px;line
     <button class="btn sec" onclick="closeMyBookings()">Close</button>
   </div>
 </div>
+
+<div class="sheet" id="authSheet">
+  <div class="form">
+    <h3>Sign in with email</h3>
+    <div class="fp">Get a one-time link by email — no password needed. Unlocks 3-month booking, multi-slot booking, and member discounts.</div>
+    <label>Email address</label>
+    <input id="authEmail" type="email" placeholder="you@example.com">
+    <div class="err" id="authErr"></div>
+    <button class="btn" id="authSendBtn" onclick="sendMagicLink()">Send me a sign-in link</button>
+    <button class="btn sec" onclick="closeAuthSheet()">Cancel</button>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
-firebase.auth().signInAnonymously().catch(e=>console.error(e));
+
+const IS_EMAIL_LINK = firebase.auth().isSignInWithEmailLink(window.location.href);
+async function completeEmailLinkSignIn(){
+  let email = localStorage.getItem('rma_email');
+  if(!email){ email = window.prompt('Confirm the email you signed in with:'); }
+  if(!email) return;
+  try{
+    await firebase.auth().signInWithEmailLink(email, window.location.href);
+    localStorage.setItem('rma_email', email);
+    window.history.replaceState({}, document.title, window.location.pathname);
+    toast('Signed in! 🎉 3-month booking & member perks unlocked.');
+  }catch(e){
+    toast('That sign-in link is invalid or expired. Please request a new one.');
+  }
+}
+function updateAuthUI(user){
+  const line = $('authline'); const icon = $('acctIcon');
+  if(!line || !icon) return;
+  if(user && !user.isAnonymous){
+    line.innerHTML = 'Signed in as <b>'+user.email+'</b> \u00b7 <a href="javascript:void(0)" onclick="doSignOut()">Sign out</a>';
+    icon.textContent = '✅';
+  } else {
+    line.innerHTML = 'Repeat customer? <a href="javascript:void(0)" onclick="openAuthSheet()">Sign in with email</a> for member perks.';
+    icon.textContent = '👤';
+  }
+}
+function doSignOut(){
+  firebase.auth().signOut().then(()=>{
+    firebase.auth().signInAnonymously().catch(e=>console.error(e));
+    toast('Signed out.');
+  });
+}
+function openAuthSheet(){
+  $('authEmail').value = localStorage.getItem('rma_email')||'';
+  $('authErr').style.display = 'none';
+  $('authSheet').classList.add('on');
+}
+function closeAuthSheet(){ $('authSheet').classList.remove('on'); }
+async function sendMagicLink(){
+  const email = $('authEmail').value.trim();
+  const err = $('authErr');
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ err.textContent='Enter a valid email address.'; err.style.display='block'; return; }
+  const btn = $('authSendBtn'); btn.disabled = true; btn.textContent = 'Sending…';
+  const actionCodeSettings = { url: window.location.origin+window.location.pathname, handleCodeInApp: true };
+  try{
+    await firebase.auth().sendSignInLinkToEmail(email, actionCodeSettings);
+    localStorage.setItem('rma_email', email);
+    closeAuthSheet();
+    toast('Link sent! Check '+email+' and tap it on this device. ✉️');
+  }catch(e){
+    err.textContent = 'Could not send link: '+e.message; err.style.display = 'block';
+  }
+  btn.disabled = false; btn.textContent = 'Send me a sign-in link';
+}
+(async function initAuth(){
+  if(IS_EMAIL_LINK) await completeEmailLinkSignIn();
+  firebase.auth().onAuthStateChanged(user=>{
+    updateAuthUI(user);
+    if(!user) firebase.auth().signInAnonymously().catch(e=>console.error(e));
+  });
+})();
 
 let selDate = null, selSlot = null, unsub = null, SLOTCFG = null;
 let calViewMonth = new Date();
