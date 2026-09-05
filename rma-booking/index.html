@@ -428,10 +428,13 @@ $('fGo').onclick=async ()=>{
       date:selDate, slot:selSlot, client, name, phone,
       price:slotPrice(selDate,selSlot), advance: trx?VENUE.advance:0, trxId:trx||null,
       status:'pending', source:'web',
+      uid: (firebase.auth().currentUser && !firebase.auth().currentUser.isAnonymous) ? firebase.auth().currentUser.uid : null,
       created:firebase.firestore.FieldValue.serverTimestamp()
     });
     localStorage.setItem('rma_name',name); localStorage.setItem('rma_phone',phone);
     db.collection('clients').doc(phone).set({name,phone,last:selDate},{merge:true}).catch(()=>{});
+    (function(){ const u=firebase.auth().currentUser; if(u && !u.isAnonymous){ db.collection('clients').doc(u.uid).set({uid:u.uid,email:u.email,phone,name,last:selDate},{merge:true}).catch(()=>{}); } })();
+
     if(typeof gtag==='function'){gtag('event','booking_request',{value:slotPrice(selDate,selSlot),currency:'BDT',method:trx?'advance_paid':'call_confirm'});}
     closeSheet(); showConfirm(id, trx);
   }catch(e){
@@ -472,15 +475,17 @@ async function switchMbTab(tab){
   await loadMyBookings();
 }
 async function loadMyBookings(){
-  const phone=localStorage.getItem('rma_phone');
-  const list=$('mbList');
-  if(!phone){ list.innerHTML='<div style="color:var(--mut);font-size:13px;text-align:center;padding:16px 0">Book a slot first to see your bookings here.</div>'; return; }
-  list.innerHTML='<div style="color:var(--mut);font-size:13px;text-align:center;padding:16px 0">Loading…</div>';
-  let q = db.collection('bookings').where('phone','==',phone);
+  const list = $('mbList');
+  const u = firebase.auth().currentUser;
+  const byUid = !!(u && !u.isAnonymous);
+  const phone = localStorage.getItem('rma_phone');
+  if(!byUid && !phone){ list.innerHTML = '<div style="color:var(--mut);font-size:13px;text-align:center;padding:16px 0">Book a slot first to see your bookings here.</div>'; return; }
+  list.innerHTML = '<div style="color:var(--mut);font-size:13px;text-align:center;padding:16px 0">Loading…</div>';
+  let q = byUid ? db.collection('bookings').where('uid','==',u.uid) : db.collection('bookings').where('phone','==',phone);
   q = mbTab==='up' ? q.where('date','>=',todayStr()) : q.where('date','<',todayStr());
   const snap = await q.get().catch(()=>null);
-  if(!snap||snap.empty){ list.innerHTML='<div style="color:var(--mut);font-size:13px;text-align:center;padding:16px 0">No '+(mbTab==='up'?'upcoming':'past')+' bookings.</div>'; return; }
-  const items=[]; snap.forEach(d=>items.push(Object.assign({id:d.id}, d.data())));
+  if(!snap||snap.empty){ list.innerHTML = '<div style="color:var(--mut);font-size:13px;text-align:center;padding:16px 0">No '+(mbTab==='up'?'upcoming':'past')+' bookings.</div>'; return; }
+  const items = []; snap.forEach(d=>items.push(Object.assign({id:d.id}, d.data())));
   items.sort((a,b)=> mbTab==='up' ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date));
   list.innerHTML = items.map(b=>{
     const s=SLOTS.find(x=>x.t===b.slot);
