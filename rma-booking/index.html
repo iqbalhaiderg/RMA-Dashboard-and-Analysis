@@ -357,6 +357,7 @@ async function authContinue(){
   btn.disabled = false; btn.textContent = 'Continue';
 }
 function openSetPass(email){
+  $('profileSheet').classList.remove('on');
   $('setPassEmail').textContent = email;
   $('newPass1').value=''; $('newPass2').value='';
   $('setPassErr').style.display = 'none';
