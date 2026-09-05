@@ -155,7 +155,7 @@ footer{text-align:center;color:var(--mut2);font-size:11.5px;margin-top:28px;line
 <header>
   <div class="hdrow"><img class="logo" src="https://images.squarespace-cdn.com/content/6a89ec1760403d36a489e15a/f07fd7f4-fb71-4da0-861c-1c2f344bbd3e/rma-logo-circle.jpg?format=100w" alt="Royal Multisport Arena"><h1>Royal <span>Multisport Arena</span></h1><div class="hicon" id="acctIcon" onclick="openAccountArea()" title="Account">👤</div><div class="hicon" onclick="openMyBookings()" title="My Bookings">📋</div></div>
   <div class="sub">Book your slot · Premium turf · Shamlapur Western City, Bhakurta, Dhaka · ☎ <a style="color:#5eead4" href="tel:+8801886542122">01886-542122</a></div>
-<div class="authline" id="authline">Repeat customer? <a href="javascript:void(0)" onclick="openAuthSheet()">Sign in with email</a> for member perks.</div></header>
+<div class="authline" id="authline">Repeat customer? <a href="javascript:void(0)" onclick="openAuthSheet()">Sign in with email</a> for member perks & a first-booking discount.</div></header>
 <main>
   <div class="seg">
     <div class="seg-btn on" id="segStrip">Quick Pick</div>
@@ -292,11 +292,12 @@ function updateAuthUI(user){
   if(!line || !icon) return;
   const wasMember = IS_MEMBER;
   IS_MEMBER = !!(user && !user.isAnonymous);
+  checkFirstBooking((user && !user.isAnonymous) ? user.uid : null);
   if(user && !user.isAnonymous){
     line.innerHTML = 'Signed in as <b>'+user.email+'</b> \u00b7 <a href="javascript:void(0)" onclick="doSignOut()">Sign out</a>';
     icon.textContent = '✅';
   } else {
-    line.innerHTML = 'Repeat customer? <a href="javascript:void(0)" onclick="openAuthSheet()">Sign in with email</a> for member perks.';
+    line.innerHTML = 'Repeat customer? <a href="javascript:void(0)" onclick="openAuthSheet()">Sign in with email</a> for member perks & a first-booking discount.';
     icon.textContent = '👤';
   }
   const mt=$('multiToggle'); if(mt) mt.style.display = IS_MEMBER ? 'inline-block' : 'none';
@@ -456,8 +457,28 @@ function discountedPrice(base, promo){
   if(promo.type==='percent') return Math.max(0, Math.round(base * (1 - promo.value/100)));
   return Math.max(0, base - promo.value);
 }
+let WELCOME = null;
+let IS_FIRST_BOOKING = false;
+function loadWelcome(){
+  db.collection('settings').doc('welcome').onSnapshot(d=>{
+    WELCOME = d.exists ? d.data() : null;
+    renderSlots(selDate, LAST_TAKEN);
+  }, e=>console.error('welcome', e));
+}
+async function checkFirstBooking(uid){
+  if(!uid){ IS_FIRST_BOOKING = false; return; }
+  try{
+    const snap = await db.collection('bookings').where('uid','==',uid).limit(1).get();
+    IS_FIRST_BOOKING = snap.empty;
+  }catch(e){ IS_FIRST_BOOKING = false; }
+  renderSlots(selDate, LAST_TAKEN);
+}
+function welcomeApplies(){
+  return IS_MEMBER && IS_FIRST_BOOKING && WELCOME && WELCOME.active;
+}
 function finalPrice(dateStr, slotT){
   const base = slotPrice(dateStr, slotT);
+  if(welcomeApplies()) return discountedPrice(base, WELCOME);
   const promo = activePromoFor(dateStr, slotT);
   return (promo && IS_MEMBER) ? discountedPrice(base, promo) : base;
 }
@@ -552,7 +573,8 @@ function renderSlots(ds,taken){
     const past = isToday && (h*60+m) < nowMin;
     const base=slotPrice(ds,s.t);
     const promo=activePromoFor(ds,s.t);
-    const price=(promo && IS_MEMBER) ? discountedPrice(base,promo) : base;
+    const useWelcome=welcomeApplies(); const effPromo=useWelcome?WELCOME:promo; const effLabel=useWelcome?'🎉 welcome price':'🎁 member price';
+    const price=(effPromo && IS_MEMBER) ? discountedPrice(base,effPromo) : base;
     let badge, priceLine;
     if(past){
       badge='<span class="badge b-bl">Past</span>'; priceLine=fmt(base)+' · full field 90 min';
@@ -563,13 +585,15 @@ function renderSlots(ds,taken){
     } else if(MULTI_MODE){
       const sel = MULTI_SET.has(s.t);
       badge = '<span class="badge b-av" style="'+(sel?'background:var(--grn-dk);color:#fff':'')+'" onclick="toggleSlotSel(\''+s.t+'\')">'+(sel?'✓ Selected':'Select '+fmt(price))+'</span>';
-      priceLine = (promo && IS_MEMBER) ? ('<s style="opacity:.55">'+fmt(base)+'</s> '+fmt(price)+' · 🎁 member price · full field 90 min') : (fmt(price)+' · full field 90 min');
+      priceLine = (effPromo && IS_MEMBER) ? ('<s style="opacity:.55">'+fmt(base)+'</s> '+fmt(price)+' · '+effLabel+' · full field 90 min') : (fmt(price)+' · full field 90 min');
     } else {
       badge = '<span class="badge b-av" onclick="openSheet(\''+s.t+'\')">Book '+fmt(price)+'</span>';
       if(promo && IS_MEMBER){
-        priceLine = '<s style="opacity:.55">'+fmt(base)+'</s> '+fmt(price)+' · 🎁 member price · full field 90 min';
+        priceLine = '<s style="opacity:.55">'+fmt(base)+'</s> '+fmt(price)+' · '+effLabel+' · full field 90 min';
       } else if(promo && !IS_MEMBER){
         priceLine = fmt(base)+' · full field 90 min · <a href="javascript:void(0)" onclick="openAuthSheet()" style="color:var(--grn-dk);font-weight:700">Sign in to save '+fmt(base-discountedPrice(base,promo))+'</a>';
+      } else if(!IS_MEMBER && WELCOME && WELCOME.active){
+        priceLine = fmt(price)+' · full field 90 min · <a href="javascript:void(0)" onclick="openAuthSheet()" style="color:var(--grn-dk);font-weight:700">🎉 New member? Sign in for a welcome discount</a>';
       } else {
         priceLine = fmt(price)+' · full field 90 min';
       }
@@ -638,11 +662,12 @@ $('fGo').onclick=async ()=>{
       const id=selDate+'_'+t.replace(':','');
       const base=slotPrice(selDate,t);
       const promo=activePromoFor(selDate,t);
-      const finalP=(promo && IS_MEMBER)?discountedPrice(base,promo):base;
+      const useWelcome=welcomeApplies(); const effPromo=useWelcome?WELCOME:promo;
+      const finalP=(effPromo && IS_MEMBER)?discountedPrice(base,effPromo):base;
       batch.set(db.collection('bookings').doc(id),{
         date:selDate, slot:t, client, name, phone,
         price:finalP, originalPrice:base,
-        promoId:(promo && IS_MEMBER)?promo.id:null, promoLabel:(promo && IS_MEMBER)?promo.label:null,
+        promoId:(effPromo && IS_MEMBER)?(useWelcome?'welcome':promo.id):null, promoLabel:(effPromo && IS_MEMBER)?(useWelcome?(WELCOME.label||'Welcome discount'):promo.label):null,
         advance: trx?VENUE.advance:0, trxId:trx||null,
         status:'pending', source:'web',
         uid,
@@ -651,7 +676,7 @@ $('fGo').onclick=async ()=>{
     });
     try{
       await batch.commit();
-      localStorage.setItem('rma_name',name); localStorage.setItem('rma_phone',phone);
+      if(useWelcome) IS_FIRST_BOOKING=false; localStorage.setItem('rma_name',name); localStorage.setItem('rma_phone',phone);
       db.collection('clients').doc(phone).set({name,phone,last:selDate},{merge:true}).catch(()=>{});
       if(uid){ db.collection('clients').doc(uid).set({uid,email:firebase.auth().currentUser.email,phone,name,last:selDate},{merge:true}).catch(()=>{}); }
       if(typeof gtag==='function'){gtag('event','booking_request',{value:slotsArr.reduce((a,t)=>a+slotPrice(selDate,t),0),currency:'BDT',method:trx?'advance_paid':'call_confirm'});}
@@ -670,18 +695,19 @@ $('fGo').onclick=async ()=>{
     const id=selDate+'_'+selSlot.replace(':','');
     const base=slotPrice(selDate,selSlot);
     const promo=activePromoFor(selDate,selSlot);
-    const finalP=(promo && IS_MEMBER)?discountedPrice(base,promo):base;
+    const useWelcome=welcomeApplies(); const effPromo=useWelcome?WELCOME:promo;
+    const finalP=(effPromo && IS_MEMBER)?discountedPrice(base,effPromo):base;
     try{
       await db.collection('bookings').doc(id).set({
         date:selDate, slot:selSlot, client, name, phone,
         price:finalP, originalPrice:base,
-        promoId:(promo && IS_MEMBER)?promo.id:null, promoLabel:(promo && IS_MEMBER)?promo.label:null,
+        promoId:(effPromo && IS_MEMBER)?(useWelcome?'welcome':promo.id):null, promoLabel:(effPromo && IS_MEMBER)?(useWelcome?(WELCOME.label||'Welcome discount'):promo.label):null,
         advance: trx?VENUE.advance:0, trxId:trx||null,
         status:'pending', source:'web',
         uid,
         created:firebase.firestore.FieldValue.serverTimestamp()
       });
-      localStorage.setItem('rma_name',name); localStorage.setItem('rma_phone',phone);
+      if(useWelcome) IS_FIRST_BOOKING=false; localStorage.setItem('rma_name',name); localStorage.setItem('rma_phone',phone);
       db.collection('clients').doc(phone).set({name,phone,last:selDate},{merge:true}).catch(()=>{});
       if(uid){ db.collection('clients').doc(uid).set({uid,email:firebase.auth().currentUser.email,phone,name,last:selDate},{merge:true}).catch(()=>{}); }
       if(typeof gtag==='function'){gtag('event','booking_request',{value:slotPrice(selDate,selSlot),currency:'BDT',method:trx?'advance_paid':'call_confirm'});}
@@ -743,7 +769,7 @@ async function loadMyBookings(){
   }).join('');
 }
 
-buildDates(); loadSlotCfg(); loadDay(selDate); loadPromos();
+buildDates(); loadSlotCfg(); loadDay(selDate); loadPromos(); loadWelcome();
 </script>
 </body>
 </html>
