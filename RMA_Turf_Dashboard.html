@@ -124,9 +124,9 @@ footer{color:var(--mut);font-size:11.5px;margin-top:26px;text-align:center}
   <div id="invNote" style="color:var(--mut);font-size:12px;margin-top:10px;line-height:1.5"></div>
 </div>
 
-<div class="sec" id="fcTitle">🔮 Profit Forecast — Aug 2026 → Dec 2027</div>
+<div class="sec" id="fcTitle">🔮 Profit Forecast</div>
 <div class="card" style="margin-bottom:14px">
-  <h3>Seasonality × current run-rate, with proposed new slot pricing <span class="hint">weekday day ৳2,500 / eve ৳4,500 · weekend (Fri–Sat) day ৳3,000 / eve ৳5,000</span></h3>
+  <h3>Actual vs. Forecast <span class="hint">seasonality + already-confirmed bookings · current pricing: weekday day ৳2,500 / eve ৳4,500 · weekend (Fri–Sat) day ৳3,000 / eve ৳5,000 · late night ৳4,000</span></h3>
   <div class="kpis" id="fcKpis" style="margin-bottom:14px"></div>
   <div class="chartbox"><canvas id="cFc"></canvas></div>
   <div id="fcNote" style="color:var(--mut);font-size:12px;margin-top:10px;line-height:1.5"></div>
@@ -312,7 +312,6 @@ function render(){
   renderForecast();
 }
 
-const FWD_BOOKED_NOTE = '146 advance bookings already on the Google Calendar for 8–31 Aug (snapshot 7 Aug 2026) — ~55% of remaining August capacity pre-sold.';
 function renderForecast(){
   // monthly actuals
   const mm={};
@@ -320,6 +319,7 @@ function renderForecast(){
   DATA.txns.forEach(t=>{const m=t.date.slice(0,7);mm[m]=mm[m]||{r:0,e:0};if(t.type==='Expense'&&!t.cat.startsWith('I -'))mm[m].e+=t.amount;else mm[m].r+=t.amount;});
   const months=Object.keys(mm).sort();
   const now=new Date();const curYM=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');const daysInCurMonth=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();const prevD=new Date(now.getFullYear(),now.getMonth()-1,1);const prevYM=prevD.getFullYear()+'-'+String(prevD.getMonth()+1).padStart(2,'0');const lastFull = now.getDate()>=daysInCurMonth ? curYM : prevYM;
+  const TODAY = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   const full=months.filter(m=>m>'2023-12'&&m<=lastFull);
   // seasonal index per calendar month (detrended: each month relative to its own year's average)
   const yearMean={};
@@ -330,45 +330,44 @@ function renderForecast(){
   const idx={};for(let c=1;c<=12;c++){idx[c]=byCal[c]?byCal[c].reduce((a,b)=>a+b,0)/byCal[c].length:1;}
   // base = seasonally adjusted level of last 3 full months
   const last3=full.slice(-3);
-  const base=last3.reduce((a,m)=>a+mm[m].r/idx[+m.slice(5,7)],0)/last3.length;
-  const expBase=full.slice(-6).reduce((a,m)=>a+mm[m].e,0)/6;
-  // new-pricing uplift from last 90 days booking mix (volumes held constant)
-  const cutoff=new Date(DATA.maxDate);cutoff.setDate(cutoff.getDate()-90);
-  const recent=DATA.sales.filter(s=>new Date(s.date)>=cutoff);
-  let oldSum=0,newSum=0;
-  recent.forEach(s=>{
-    const dow=new Date(s.date).getDay(); // 5=Fri,6=Sat
-    const we=(dow===5||dow===6);
-    const mins=slotMins(s.slot);
-    const isLate=mins>=1440; // 00:30/02:00/03:30 (slotMins wraps <06:00 to +24h) — flat Late Night rate
-    const eve=!isLate && mins>=17*60; // 17:00 through 23:00
-    const np=isLate?4000:(we?(eve?5000:3000):(eve?4500:2500));
-    oldSum+=s.paid;newSum+=np;
+  const base=last3.length?last3.reduce((a,m)=>a+mm[m].r/idx[+m.slice(5,7)],0)/last3.length:0;
+  const expBase=full.slice(-6).reduce((a,m)=>a+mm[m].e,0)/(full.slice(-6).length||1);
+  // already-confirmed future bookings, by month (committed price, not yet occurred)
+  const bookedByMonth={};
+  DATA.sales.forEach(s=>{ if(s.date>TODAY){ const m=s.date.slice(0,7); bookedByMonth[m]=(bookedByMonth[m]||0)+s.amount; } });
+  // forecast months: next 6 months starting right after the last complete month
+  const fM=[];let d=new Date(+lastFull.slice(0,4), +lastFull.slice(5,7),1);
+  while(fM.length<6){const m=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;fM.push(m);d.setMonth(d.getMonth()+1);}
+  const fMonNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const fcTitleEl=document.getElementById('fcTitle');
+  if(fcTitleEl&&fM.length){const first=fM[0],last=fM[fM.length-1];fcTitleEl.textContent='🔮 Profit Forecast — '+fMonNames[+first.slice(5,7)-1]+' '+first.slice(0,4)+' → '+fMonNames[+last.slice(5,7)-1]+' '+last.slice(0,4);}
+  const fRev=fM.map(m=>{
+    const seasonal=base*(idx[+m.slice(5,7)]||1);
+    const known=(m===curYM?(mm[curYM]?mm[curYM].r:0):0)+(bookedByMonth[m]||0);
+    return Math.max(known, seasonal);
   });
-  const uplift=oldSum?newSum/oldSum:1;
-  // forecast months: after lastFull through 2027-12
-  const fM=[];let d=new Date(+lastFull.slice(0,4),+lastFull.slice(5,7),1);
-  while(true){const m=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;if(m>'2027-12')break;fM.push(m);d.setMonth(d.getMonth()+1);}
-  const fMonNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];const fcTitleEl=document.getElementById('fcTitle');if(fcTitleEl&&fM.length)fcTitleEl.textContent='🔮 Profit Forecast — '+fMonNames[+fM[0].slice(5,7)-1]+' '+fM[0].slice(0,4)+' → Dec 2027';
-  const fRev=fM.map(m=>base*idx[+m.slice(5,7)]);
   const fProf=fRev.map(r=>r-expBase+10000);
-  const fProfNew=fRev.map(r=>r*uplift-expBase+10000);
-  const cum=fProf.reduce((a,b)=>a+b,0), cumNew=fProfNew.reduce((a,b)=>a+b,0);
+  const cum=fProf.reduce((a,b)=>a+b,0);
+  const bookedTotal=fM.reduce((a,m)=>a+(bookedByMonth[m]||0),0);
+  const actualMonths=full.slice(-6);
+  const actualProf=actualMonths.map(m=>mm[m].r-mm[m].e);
   document.getElementById('fcKpis').innerHTML=[
-    ['Avg Monthly Profit (current prices)', fmt(cum/fM.length), 'forecast avg, next '+fM.length+' months'],
-    ['Avg Monthly Profit (new prices)', fmt(cumNew/fM.length), 'volumes held constant'],
-    ['Revenue Uplift from New Pricing', pct(uplift-1), 'vs realized prices, last 90 days mix'],
-    ['Cumulative Profit → Dec 2027', fmt(cum), 'current prices'],
-    ['Cumulative Profit → Dec 2027', fmt(cumNew), 'new prices'],
-    ['Reserved for Investment (30%)', fmt(cumNew*0.3), 'set aside from profit, new-price scenario'],
-    ['Distributable to Owners (70%)', fmt(cumNew*0.7), 'available after investment reserve'],
+    ['Avg Monthly Profit (last 3 mo, actual)', fmt(last3.length?last3.reduce((a,m)=>a+(mm[m].r-mm[m].e),0)/last3.length:0), 'trailing actuals'],
+    ['Avg Monthly Profit (forecast)', fmt(cum/fM.length), 'next '+fM.length+' months'],
+    ['Already Booked Revenue', fmt(bookedTotal), 'confirmed, next '+fM.length+' months'],
+    ['Cumulative Forecast Profit', fmt(cum), 'next '+fM.length+' months'],
+    ['Reserved for Investment (30%)', fmt(cum*0.3), 'set aside from forecast profit'],
+    ['Distributable to Owners (70%)', fmt(cum*0.7), 'available after investment reserve'],
   ].map(k=>`<div class="kpi"><div class="l">${k[0]}</div><div class="v">${k[1]}</div><div class="d">${k[2]}</div></div>`).join('');
   destroy('fc');
-  charts.fc=new Chart(cFc,{data:{labels:fM,datasets:[
-    {type:'bar',label:'Profit — current prices (৳k)',data:fProf.map(v=>v/1000),backgroundColor:'#3b82f680',borderRadius:3},
-    {type:'bar',label:'Profit — new prices (৳k)',data:fProfNew.map(v=>v/1000),backgroundColor:'#2f9bdb99',borderRadius:3},
+  const fcLabels=actualMonths.concat(fM);
+  const actualData=actualProf.map(v=>v/1000).concat(fM.map(()=>null));
+  const forecastData=actualMonths.map(()=>null).concat(fProf.map(v=>v/1000));
+  charts.fc=new Chart(cFc,{data:{labels:fcLabels,datasets:[
+    {type:'bar',label:'Actual Profit (৳k)',data:actualData,backgroundColor:'#2f9bdb99',borderRadius:3},
+    {type:'bar',label:'Forecast Profit (৳k)',data:forecastData,backgroundColor:'#f59e0b99',borderRadius:3},
   ]},options:baseOpts});
-  document.getElementById('fcNote').textContent=`Method: seasonal index from ${full.length} complete months (captures the Ramadan dip in Feb–Mar 2027) × run-rate of the last 3 complete months (base ৳${fmtK(base)} rev/month), minus average expenses of the last 6 months (৳${fmtK(expBase)}), plus ৳10k shop rent. New-price scenario re-prices the last-90-day booking mix at the proposed card (weekday day 2,500 / eve 4,500; Fri–Sat day 3,000 / eve 5,000) with volumes held constant — a ${pct(uplift-1)} uplift; some volume loss on price-sensitive day slots is possible. ${FWD_BOOKED_NOTE}`;
+  document.getElementById('fcNote').textContent=`Method: seasonal index from ${full.length} complete months (each calendar month relative to its own year's average) × deseasonalized run-rate of the last 3 complete months (base ৳${fmtK(base)} rev/month), minus average expenses of the last 6 months (৳${fmtK(expBase)}), plus ৳10k shop rent. Each forecast month uses whichever is higher: revenue already confirmed on the calendar for that month (৳${fmtK(bookedTotal)} booked across the next ${fM.length} months) or the seasonal run-rate estimate — so well-booked months aren't understated and quieter months fall back to the historical pattern.`;
 }
 
 function renderInvestor(){
