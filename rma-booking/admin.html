@@ -85,6 +85,12 @@ thead th{position:sticky;top:0;background:var(--card2);z-index:1}
 th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
 th.sortable:hover{color:var(--txt)}
 .kpi3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px}
+    .kpi4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
+    .kpi4 .card{margin:0;text-align:center;padding:10px 4px}.kpi4 .v{font-size:16px;font-weight:800}.kpi4 .l{font-size:9.5px;color:var(--mut);font-weight:600}
+    .modalOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40;align-items:center;justify-content:center;padding:16px}
+    .modalOverlay.show{display:flex}
+    .modalBox{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;max-width:360px;width:100%;box-shadow:var(--shadow)}
+    .modalBox h3{margin:0 0 12px}
 .kpi3 .card{margin:0;text-align:center}.kpi3 .v{font-size:18px;font-weight:800}.kpi3 .l{font-size:10.5px;color:var(--mut);font-weight:600}
 @media (min-width:760px){
   main{max-width:920px;padding:22px}
@@ -190,6 +196,12 @@ header>div{display:flex;align-items:center;gap:8px}
       <div class="card"><div class="v" id="fExp">–</div><div class="l">Expenses</div></div>
       <div class="card"><div class="v" id="fNet">–</div><div class="l">Net</div></div>
     </div>
+    <div class="kpi4">
+      <div class="card"><div class="v" id="fBkTotal">–</div><div class="l">Bookings</div></div>
+      <div class="card"><div class="v" id="fBkPaid">–</div><div class="l">Paid</div></div>
+      <div class="card"><div class="v" id="fBkPartial">–</div><div class="l">Partial</div></div>
+      <div class="card"><div class="v" id="fBkUnpaid">–</div><div class="l">Unpaid</div></div>
+    </div>
     <div class="card"><h3>➕ New Entry</h3>
       <div class="row"><div><label>Date</label><input type="date" id="tDate"></div><div><label>Type</label><select id="tType"><option>Expense</option><option>Income</option></select></div></div>
       <div class="row"><div><label>Head</label><select id="tHead"></select></div><div><label>Method</label><select id="tMethod"></select></div></div>
@@ -276,6 +288,20 @@ header>div{display:flex;align-items:center;gap:8px}
 </main>
 </div>
 <div class="toast" id="toast"></div>
+  <div class="modalOverlay" id="txnEditOverlay">
+    <div class="modalBox">
+      <h3>✎ Edit Entry</h3>
+      <label>Date</label><input type="date" id="etDate">
+      <label>Type</label><select id="etType" onchange="fillEditHeadSel()"><option>Expense</option><option>Income</option></select>
+      <label>Head</label><select id="etHead"></select>
+      <label>Details</label><input id="etDet" placeholder="e.g. Diesel 30 Litre">
+      <label>Amount (BDT)</label><input type="number" id="etAmt">
+      <div class="row" style="margin-top:14px">
+        <button class="btn" onclick="saveTxnEdit()">Save</button>
+        <button class="btn ghost" onclick="closeTxnEdit()">Cancel</button>
+      </div>
+    </div>
+  </div>
 
 <script>
 firebase.initializeApp(FIREBASE_CONFIG);
@@ -834,8 +860,10 @@ async function loadTxns(){
     if(t.type==='Income'){ inc+=(+t.amount||0); incRows.push({date:t.date,name:'Manual: '+(t.cat||'—'),phone:'',detail:t.details||'',discount:0,amount:+t.amount||0,method:t.method||'—'}); }
     else exp+=(+t.amount||0);
   });
+  let bkTotal=0,bkPaid=0,bkPartial=0,bkUnpaid=0;
   const bs=await db.collection('bookings').where('date','>=',from).where('date','<=',to).get();
   bs.forEach(d=>{const b=d.data();
+    if(b.status==='confirmed'){bkTotal++; const pr=+b.price||0, pd=+b.paid||0; if(pd>=pr&&pr>0)bkPaid++; else if(pd>0)bkPartial++; else bkUnpaid++;}
     if(b.status==='confirmed' && (+b.paid||0)>0){
       inc+=(+b.paid||0);
       incRows.push({date:b.date,name:b.name||b.client||'—',phone:b.phone||'',detail:b.slot||'',discount:+b.discount||0,amount:+b.paid||0,method:b.method||'—'});
@@ -846,14 +874,29 @@ async function loadTxns(){
   $('finIncomeSum').textContent=FIN_INCOME_ROWS.length+' entrie(s) from '+from+' to '+to+' · Total '+fmt(inc);
 
   $('fRev').textContent=fmt(inc);$('fExp').textContent=fmt(exp);$('fNet').textContent=fmt(inc-exp);
+  $('fBkTotal').textContent=bkTotal;$('fBkPaid').textContent=bkPaid;$('fBkPartial').textContent=bkPartial;$('fBkUnpaid').textContent=bkUnpaid;
 }
-async function editTxn(id){
+let ET_ID=null;
+function editTxn(id){
   const t=TXCACHE[id]; if(!t)return;
-  const details=prompt('Details:',t.details||'');
-  if(details===null)return;
-  const amt=prompt('Amount (BDT):',t.amount);
-  if(amt===null)return;
-  await db.collection('transactions').doc(id).update({details,amount:+amt||0});
+  ET_ID=id;
+  $('etDate').value=t.date||'';
+  $('etType').value=t.type||'Expense';
+  fillEditHeadSel(); $('etHead').value=t.cat||'';
+  $('etDet').value=t.details||'';
+  $('etAmt').value=t.amount||'';
+  $('txnEditOverlay').classList.add('show');
+}
+function fillEditHeadSel(){
+  const ty=$('etType').value;
+  $('etHead').innerHTML=(window.HEADS||[]).filter(h=>h.type===ty).map(h=>`<option>${h.name}</option>`).join('');
+}
+function closeTxnEdit(){ $('txnEditOverlay').classList.remove('show'); ET_ID=null; }
+async function saveTxnEdit(){
+  if(!ET_ID)return;
+  const amt=+$('etAmt').value; if(!amt){toast('Enter amount');return;}
+  await db.collection('transactions').doc(ET_ID).update({date:$('etDate').value,type:$('etType').value,cat:$('etHead').value,details:$('etDet').value,amount:amt});
+  closeTxnEdit();
   toast('Entry updated'); loadTxns();
 }
 async function deleteTxn(id){
