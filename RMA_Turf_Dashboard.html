@@ -667,7 +667,14 @@ function computePL(from,to){
   exp.forEach(t=>{expByCat[t.cat]=(expByCat[t.cat]||0)+t.amount;});
   const expTot = exp.reduce((a,t)=>a+t.amount,0);
   const profit = rev - expTot;
-  return {from,to,bookingRev,otherInc,rev,expByCat,expTot,profit,bookings:S.length};
+  // Employee bonus pool: 5% of additional sales once occupancy exceeds 45% (realized bookings only, same basis as the Occupancy KPI)
+  const _n=new Date(); const _today=`${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,'0')}-${String(_n.getDate()).padStart(2,'0')}`;
+  const _occTo=to>_today?_today:to; const _occDays=from>_occTo?0:daysIn(from,_occTo);
+  const _Sr=S.filter(s=>s.date<_today); const _occ=_occDays?_Sr.length/(_occDays*11):0;
+  const _thr=0.45*_occDays*11; const bonusExcess=_occ>0.45?Math.max(0,_Sr.length-_thr):0;
+  const _avgRev=_Sr.length?_Sr.reduce((a,s)=>a+s.paid,0)/_Sr.length:0;
+  const addSales=bonusExcess*_avgRev; const bonus=addSales*0.05;
+  return {from,to,bookingRev,otherInc,rev,expByCat,expTot,profit,bookings:S.length,occ:_occ,bonusExcess,addSales,bonus};
 }
 function plShiftRange(from,to,mode){
   const fD=new Date(from+'T00:00:00'), tD=new Date(to+'T00:00:00');
@@ -724,6 +731,12 @@ function renderPL(){
   const marginA = A.rev? (A.profit/A.rev*100) : 0;
   const marginB = (B && B.rev)? (B.profit/B.rev*100) : null;
   rows+=`<tr style="font-weight:700"><td>Net margin</td><td class="r">${marginA.toFixed(1)}%</td>${B?`<td class="r">${(marginB||0).toFixed(1)}%</td><td class="r ${marginA>=(marginB||0)?'up':'dn'}">${(marginA-(marginB||0)>=0?'+':'')}${(marginA-(marginB||0)).toFixed(1)} pts</td>`:''}</tr>`;
+  const _bc=(f)=>B?`<td class="r">${f(B)}</td><td class="r"></td>`:'';
+  rows += `<tr><td colspan="${B?4:2}" style="padding-top:18px;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.4px">Employee bonus pool <span style="text-transform:none">(separate &mdash; not deducted from net profit)</span></td></tr>`;
+  rows += `<tr><td>Occupancy <span style="color:var(--mut);font-size:11px">(bonus applies above 45%)</span></td><td class="r">${(A.occ*100).toFixed(1)}%</td>${_bc(x=>(x.occ*100).toFixed(1)+'%')}</tr>`;
+  rows += `<tr><td>Bookings above the 45% level</td><td class="r">${Math.round(A.bonusExcess).toLocaleString()}</td>${_bc(x=>Math.round(x.bonusExcess).toLocaleString())}</tr>`;
+  rows += `<tr><td>Additional sales</td><td class="r">${fmt(A.addSales)}</td>${_bc(x=>fmt(x.addSales))}</tr>`;
+  rows += plRow('Bonus pool (5% of additional sales)', A.bonus, B?B.bonus:null,true,false);
   out.innerHTML = `<div style="overflow-x:auto"><table>${head}${rows}</table></div>
     <div style="color:var(--mut);font-size:11.5px;margin-top:10px">${A.bookings.toLocaleString()} bookings in the primary period${B?` · ${B.bookings.toLocaleString()} in the comparison period`:''}.</div>`;
 }
