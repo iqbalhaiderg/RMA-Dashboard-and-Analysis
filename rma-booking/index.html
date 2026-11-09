@@ -86,6 +86,13 @@ main{max-width:520px;margin:0 auto;padding:14px 16px}
 .cal-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:10px;font-size:13px;font-weight:600;color:var(--txt);cursor:pointer;position:relative}
 .cal-cell.mut{visibility:hidden;pointer-events:none}
 .cal-cell.disabled{color:var(--mut2);pointer-events:none;opacity:.4}
+.cal-cell.hol{background:#fde9e9;color:#ef4444;font-weight:700}
+.cal-cell.hol.on{background:#ef4444;color:#fff}
+.dch.hol{border-color:#ef4444}
+.dch.hol .d2{color:#ef4444}
+.holcard{margin:12px 0;padding:18px 16px;border:1px solid #ef4444;border-radius:14px;background:#fde9e9;color:#b91c1c;text-align:center}
+.holcard .t{font-size:15px;font-weight:800;margin-bottom:6px}
+.holcard .m{font-size:13.5px;line-height:1.5;color:#7f1d1d}
 .cal-cell.today::after{content:'';position:absolute;bottom:4px;width:4px;height:4px;border-radius:50%;background:var(--grn)}
 .cal-cell.on{background:var(--navy);color:#fff}
 .cal-cell.on.today::after{background:#5eead4}
@@ -511,6 +518,7 @@ function buildDates(){
     const ds=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
     const div=document.createElement('div');
     div.className='dch'+(d.getDay()===5||d.getDay()===6?' fri':'')+(i===0?' on':'');
+    div.dataset.d=ds; if(holidayFor(ds)) div.classList.add('hol');
     div.innerHTML=`<div class="d1">${d.toLocaleDateString('en-GB',{weekday:'short'})}</div><div class="d2">${d.getDate()}</div><div class="d1">${d.toLocaleDateString('en-GB',{month:'short'})}</div>`;
     div.onclick=()=>{document.querySelectorAll('.dch').forEach(x=>x.classList.remove('on'));div.classList.add('on');loadDay(ds);};
     el.appendChild(div);
@@ -536,6 +544,7 @@ function renderCalendar(){
     const c=document.createElement('div');
     let cls='cal-cell';
     if(ds<minD||ds>maxD) cls+=' disabled';
+    if(holidayFor(ds)) cls+=' hol';
     if(ds===todayStr()) cls+=' today';
     if(ds===selDate) cls+=' on';
     c.className=cls;
@@ -563,6 +572,13 @@ function loadDay(ds){
 }
 function renderSlots(ds,taken){
   const el=$('slots'); el.innerHTML='';
+  const _hol=holidayFor(ds);
+  if(_hol){
+    el.innerHTML='<div class="holcard"><div class="t">🚧 Turf closed</div><div class="m"></div></div>';
+    el.querySelector('.m').textContent=_hol.msg;
+    if(_hol.from!==_hol.to){ const r=document.createElement('div'); r.style.cssText='font-size:11.5px;margin-top:6px;opacity:.8'; r.textContent=_hol.from+' → '+_hol.to; el.querySelector('.holcard').appendChild(r); }
+    return;
+  }
   const isToday = ds===todayStr();
   const nowMin = new Date().getHours()*60+new Date().getMinutes();
   let shown=0;
@@ -770,7 +786,18 @@ async function loadMyBookings(){
   }).join('');
 }
 
-buildDates(); loadSlotCfg(); loadDay(selDate); loadPromos(); loadWelcome();
+buildDates(); loadSlotCfg(); loadDay(selDate); loadPromos(); // ---- Turf holidays (closures) ----
+var HOLIDAYS=[];
+function holidayFor(ds){ return (HOLIDAYS||[]).find(h=>ds>=h.from&&ds<=h.to)||null; }
+function loadHolidays(){
+  db.collection('settings').doc('holidays').onSnapshot(d=>{
+    HOLIDAYS=(d.exists&&d.data().items)||[];
+    document.querySelectorAll('.dch').forEach(x=>x.classList.toggle('hol',!!holidayFor(x.dataset.d)));
+    if($('calwrap')&&$('calwrap').classList.contains('on')) renderCalendar();
+    if(selDate) renderSlots(selDate, LAST_TAKEN||{});
+  }, e=>console.error('holidays', e));
+}
+loadHolidays(); loadWelcome();
 </script>
 </body>
 </html>
