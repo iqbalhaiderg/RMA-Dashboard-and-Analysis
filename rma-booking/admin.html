@@ -253,6 +253,13 @@ header>div{display:flex;align-items:center;gap:8px}
       <div class="mini" style="margin-bottom:8px">Pick a category per slot for weekdays vs weekends (Fri/Sat), and switch a slot off if it's not being sold.</div>
       <div style="overflow-x:auto"><table id="slotAssignTable"></table></div>
     </div>
+    <div class="card"><h3>🚧 Turf Holidays / Closures</h3>
+      <div class="mini" style="margin-bottom:8px">Days the turf is closed. Clients cannot book these dates and see your message in the calendar.</div>
+      <div class="row"><div><label>From</label><input type="date" id="hFrom"></div><div><label>To</label><input type="date" id="hTo"></div></div>
+      <label>Message shown to clients</label><input id="hMsg" maxlength="120" placeholder="e.g. Closed for turf maintenance">
+      <button class="btn" onclick="addHoliday()">Add Closure</button>
+      <div id="hList" style="margin-top:10px"></div>
+    </div>
     <div class="card"><h3>👥 Members</h3>
       <div style="font-size:28px;font-weight:800" id="memberCount">–</div>
       <div class="mini">Signed-up member accounts (excludes guest bookings)</div>
@@ -376,7 +383,7 @@ function init(){
   $('calDate').onchange=()=>renderCal();
     const abF=new Date(),abT=new Date(); abF.setDate(abF.getDate()-30); abT.setDate(abT.getDate()+60);
   $('abFrom').value=localDateStr(abF); $('abTo').value=localDateStr(abT);
-  watchRequests(); renderCal(); loadHeads(); loadTxns(); loadAdmins(); loadSlotCfg(); loadAllBookings(); initPromoForm(); loadPromos(); loadWelcomeSettings(); loadMemberCount();
+  watchRequests(); renderCal(); loadHeads(); loadTxns(); loadAdmins(); loadSlotCfg(); loadAllBookings(); initPromoForm(); loadPromos(); loadWelcomeSettings(); loadMemberCount(); loadHolidays();
 }
 
 // ---- Slot categories, pricing & availability ----
@@ -638,6 +645,7 @@ async function renderCal(){
   const snap=await db.collection('bookings').where('date','==',ds).get();
   const map={};snap.forEach(d=>map[d.data().slot]={id:d.id,...d.data()});
   const el=$('calGrid');el.innerHTML='';
+  { const _hol=holidayFor(ds); if(_hol){ const _b=document.createElement('div'); _b.className='mini'; _b.style.cssText='grid-column:1/-1;padding:10px;border:1px solid var(--red);border-radius:10px;color:var(--red)'; _b.textContent='🚧 Turf closed: '+_hol.msg; el.appendChild(_b); } }
   SLOTS.forEach(s=>{
     const b=map[s.t];
     const cls=b?(b.status==='pending'?'pen':'conf'):'av';
@@ -653,11 +661,48 @@ async function renderCal(){
   });
 }
 
+// ---- Turf holidays ----
+let HOLIDAYS=[];
+function holidayFor(ds){ return HOLIDAYS.find(h=>ds>=h.from&&ds<=h.to)||null; }
+function renderHolidays(){
+  const el=$('hList'); if(!el)return;
+  const rows=HOLIDAYS.map((h,i)=>({h,i})).sort((a,b)=>a.h.from<b.h.from?-1:1);
+  el.innerHTML=rows.length?rows.map(({h,i})=>{
+    const rng=h.from===h.to?h.from:h.from+' → '+h.to;
+    return '<div class="row" style="align-items:center;margin-bottom:6px"><div class="mini"><b>'+rng+'</b><br>'+String(h.msg).replace(/</g,'&lt;')+'</div><div style="flex:0 0 70px"><button class="btn danger" style="margin:0;padding:6px 10px;font-size:11px" onclick="delHoliday('+i+')">✕</button></div></div>';
+  }).join(''):'<div class="mini">No closures set.</div>';
+}
+async function loadHolidays(){
+  try{ const d=await db.collection('settings').doc('holidays').get(); HOLIDAYS=(d.exists&&d.data().items)||[]; }catch(e){ HOLIDAYS=[]; }
+  renderHolidays();
+}
+async function saveHolidays(){
+  await db.collection('settings').doc('holidays').set({items:HOLIDAYS});
+  renderHolidays();
+}
+async function addHoliday(){
+  const from=$('hFrom').value, to=$('hTo').value||from, msg=$('hMsg').value.trim();
+  if(!from){toast('Pick a from date');return;}
+  if(to<from){toast('To date must be on or after From date');return;}
+  if(!msg){toast('Enter a message for clients');return;}
+  HOLIDAYS.push({from,to,msg});
+  await saveHolidays();
+  $('hFrom').value=''; $('hTo').value=''; $('hMsg').value='';
+  toast('Closure added ✅');
+}
+async function delHoliday(i){
+  if(!confirm('Remove this closure?'))return;
+  HOLIDAYS.splice(i,1);
+  await saveHolidays();
+  toast('Closure removed');
+}
+
 // ---- Manual booking ----
 async function manualBook(){
   const ds=$('mDate').value;
   const name=$('mName').value.trim(), phone=$('mPhone').value.trim();
   if(!name){toast('Enter client name');return;}
+  { const _h=holidayFor(ds); if(_h && !confirm('Turf is closed on '+ds+' ('+_h.msg+'). Book anyway?')) return; }
   if(!/^01\d{9}$/.test(phone)){toast('Enter a valid 11-digit phone number (01XXXXXXXXX)');return;}
   if(!M_SELECTED.size){toast('Select at least one slot');return;}
   const disc=+$('mDisc').value||0, paidEach=+$('mPaid').value||0, method=$('mMethod').value, status=$('mStatus').value;
